@@ -3,6 +3,7 @@ import { Link, NavLink, useNavigate } from "react-router-dom";
 import { ChevronDown, Grid3X3, Menu, MessageCircle, Moon, Search, ShoppingBag, Sparkles, Store, Sun, UserRound, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { imageUrl, useFallbackImage } from "../lib/images";
 import { useAuthStore } from "../store/auth";
 import type { Cart, Category } from "../types";
 import { getInitials } from "../lib/format";
@@ -105,7 +106,7 @@ export function Layout({ children }: { children: ReactNode }) {
               {categories.slice(0, 10).map((category) => (
                 <Link key={category.id} to={`/buscar?categoryId=${category.id}`}>
                   <span className="category-mini-image">
-                    {category.products?.[0]?.images?.[0]?.url ? <img src={category.products[0].images[0].url} alt="" /> : category.name[0]}
+                    {category.products?.[0]?.images?.[0]?.url ? <img src={imageUrl(category.products[0].images[0].url)} onError={useFallbackImage} alt="" /> : category.name[0]}
                   </span>
                   <span><strong>{category.name}</strong><small>{category._count?.products ?? 0} produtos</small></span>
                 </Link>

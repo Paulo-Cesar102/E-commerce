@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Headphones, PackageCheck, ShieldCheck, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
+import { imageUrl, useFallbackImage } from "../lib/images";
 import type { Category, Product } from "../types";
 import { ProductCard } from "../components/ProductCard";
 import { EmptyState, ErrorState, Loader } from "../components/UI";
@@ -46,7 +47,7 @@ export function HomePage() {
           <div className="category-grid category-image-grid">
             {categories.slice(0, 6).map((category, index) => (
               <Link key={category.id} to={`/buscar?categoryId=${category.id}`} className={`category-tile category-tone-${index % 6}`}>
-                {category.products?.[0]?.images?.[0]?.url && <img src={category.products[0].images[0].url} alt="" />}
+                {category.products?.[0]?.images?.[0]?.url && <img src={imageUrl(category.products[0].images[0].url)} onError={useFallbackImage} alt="" />}
                 <span className="category-shade" />
                 <span className="category-count">{category._count?.products ?? 0} produtos</span>
                 <strong>{category.name}</strong>

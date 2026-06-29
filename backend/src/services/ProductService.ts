@@ -1,5 +1,6 @@
-import prisma from "../../prisma/prisma.js";
 import { AppError } from "../errors/AppError.js";
+import { ProductRepository } from "../repository/ProductRepository.js";
+import { FileStorageService } from "./FileStorageService.js";
 
 type ProductQuery = {
   q?: string;
@@ -21,6 +22,11 @@ type ProductInput = {
 };
 
 export class ProductService {
+  constructor(
+    private readonly productRepository = new ProductRepository(),
+    private readonly fileStorage = new FileStorageService(),
+  ) {}
+
   async list({ q, categoryId, sellerId, sort, page, limit }: ProductQuery) {
     const where = {
       status: "ACTIVE" as const,
@@ -37,106 +43,35 @@ export class ProductService {
             ? [{ price: "desc" as const }]
             : [{ averageRating: "desc" as const }, { ratingCount: "desc" as const }, { createdAt: "desc" as const }];
 
-    const [items, total] = await prisma.$transaction([
-      prisma.product.findMany({
-        where,
-        include: {
-          category: true,
-          images: { orderBy: { position: "asc" } },
-          reviews: { select: { rating: true } },
-        },
-        orderBy,
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      prisma.product.count({ where }),
-    ]);
+    const { items, total } = await this.productRepository.list(where, orderBy, page, limit);
 
     return { items, total, page, limit };
   }
 
   async findById(id: string) {
-    const product = await prisma.product.findFirst({
-      where: { id, status: "ACTIVE" },
-      include: {
-        category: true,
-        seller: true,
-        images: { orderBy: { position: "asc" } },
-        options: true,
-        reviews: { include: { user: { select: { id: true, name: true } } } },
-      },
-    });
+    const product = await this.productRepository.findActiveById(id);
 
     if (!product) {
       throw new AppError(404, "Produto nao encontrado");
     }
 
-    const related = await prisma.product.findMany({
-      where: {
-        id: { not: product.id },
-        categoryId: product.categoryId,
-        status: "ACTIVE",
-      },
-      include: {
-        category: true,
-        seller: true,
-        reviews: { select: { rating: true } },
-        images: { take: 1, orderBy: { position: "asc" } },
-      },
-      orderBy: [{ averageRating: "desc" }, { ratingCount: "desc" }],
-      take: 6,
-    });
+    const related = await this.productRepository.findRelated(product.id, product.categoryId);
 
     return { product, related };
   }
 
   async categories() {
-    return prisma.category.findMany({
-      where: { active: true },
-      include: {
-        _count: { select: { products: { where: { status: "ACTIVE" } } } },
-        products: {
-          where: { status: "ACTIVE", images: { some: {} } },
-          select: { images: { take: 1, orderBy: { position: "asc" } } },
-          take: 1,
-        },
-      },
-      orderBy: { name: "asc" },
-    });
+    return this.productRepository.findCategories();
   }
 
   async store(sellerId: string) {
-    const seller = await prisma.sellerProfile.findUnique({
-      where: { id: sellerId },
-      include: {
-        products: {
-          where: { status: "ACTIVE" },
-          include: {
-            category: true,
-            images: { orderBy: { position: "asc" } },
-            reviews: { select: { rating: true } },
-          },
-          orderBy: [{ averageRating: "desc" }, { ratingCount: "desc" }, { createdAt: "desc" }],
-        },
-      },
-    });
+    const seller = await this.productRepository.findStore(sellerId);
 
     if (!seller) {
       throw new AppError(404, "Loja nao encontrada");
     }
 
-    const categories = await prisma.category.findMany({
-      where: {
-        active: true,
-        products: { some: { sellerId, status: "ACTIVE" } },
-      },
-      include: {
-        _count: {
-          select: { products: { where: { sellerId, status: "ACTIVE" } } },
-        },
-      },
-      orderBy: { name: "asc" },
-    });
+    const categories = await this.productRepository.findStoreCategories(sellerId);
 
     return { ...seller, categories };
   }
@@ -145,24 +80,17 @@ export class ProductService {
     const seller = await this.getSeller(userId);
     await this.ensureCategory(input.categoryId);
 
-    return prisma.product.create({
-      data: {
-        sellerId: seller.id,
-        categoryId: input.categoryId,
-        name: input.name,
-        description: input.description,
-        price: input.price,
-        stock: input.stock,
-        images: { create: input.images?.map((image, position) => ({ ...image, position })) ?? [] },
-        options: { create: input.options ?? [] },
-      },
-      include: { images: true, options: true },
-    });
+    try {
+      return await this.productRepository.createProduct(seller.id, input);
+    } catch (error) {
+      await this.fileStorage.deleteUploadedFiles(input.images?.map((image) => image.url) ?? []);
+      throw error;
+    }
   }
 
   async update(userId: string, productId: string, input: Partial<ProductInput> & { status?: "ACTIVE" | "INACTIVE" }) {
     const seller = await this.getSeller(userId);
-    const product = await prisma.product.findFirst({ where: { id: productId, sellerId: seller.id } });
+    const product = await this.productRepository.findSellerProduct(productId, seller.id);
     if (!product) {
       throw new AppError(404, "Produto nao encontrado");
     }
@@ -170,6 +98,10 @@ export class ProductService {
     if (input.categoryId) {
       await this.ensureCategory(input.categoryId);
     }
+
+    const previousImageUrls = product.images.map((image) => image.url);
+    const nextImageUrls = input.images?.map((image) => image.url) ?? [];
+    const removedImageUrls = input.images ? previousImageUrls.filter((url) => !nextImageUrls.includes(url)) : [];
 
     const data = {
       ...(input.categoryId ? { categoryId: input.categoryId } : {}),
@@ -196,19 +128,15 @@ export class ProductService {
         : {}),
     };
 
-    return prisma.product.update({
-      where: { id: productId },
-      data,
-      include: { images: true, options: true },
-    });
+    const updated = await this.productRepository.updateProduct(productId, data);
+    await this.fileStorage.deleteUploadedFiles(removedImageUrls);
+
+    return updated;
   }
 
   async delete(userId: string, productId: string) {
     const seller = await this.getSeller(userId);
-    const result = await prisma.product.updateMany({
-      where: { id: productId, sellerId: seller.id },
-      data: { status: "INACTIVE" },
-    });
+    const result = await this.productRepository.deactivateProduct(productId, seller.id);
 
     if (result.count === 0) {
       throw new AppError(404, "Produto nao encontrado");
@@ -216,42 +144,23 @@ export class ProductService {
   }
 
   async review(userId: string, productId: string, input: { orderId: string; rating: number; comment?: string }) {
-    const orderItem = await prisma.orderItem.findFirst({
-      where: { orderId: input.orderId, productId, order: { customerId: userId, status: "DELIVERED" } },
-    });
+    const orderItem = await this.productRepository.findDeliveredOrderItem(userId, productId, input.orderId);
 
     if (!orderItem) {
       throw new AppError(403, "Avaliacao liberada apenas para compra entregue");
     }
 
-    return prisma.$transaction(async (tx) => {
-      const review = await tx.review.create({
-        data: {
-          userId,
-          productId,
-          orderId: input.orderId,
-          rating: input.rating,
-          ...(input.comment ? { comment: input.comment } : {}),
-        },
-      });
-      const aggregate = await tx.review.aggregate({
-        where: { productId },
-        _avg: { rating: true },
-        _count: { rating: true },
-      });
-      await tx.product.update({
-        where: { id: productId },
-        data: {
-          averageRating: aggregate._avg.rating ?? 0,
-          ratingCount: aggregate._count.rating,
-        },
-      });
-      return review;
+    return this.productRepository.createReviewAndRefreshRating({
+      userId,
+      productId,
+      orderId: input.orderId,
+      rating: input.rating,
+      ...(input.comment ? { comment: input.comment } : {}),
     });
   }
 
   private async getSeller(userId: string) {
-    const seller = await prisma.sellerProfile.findUnique({ where: { userId } });
+    const seller = await this.productRepository.findSellerByUserId(userId);
     if (!seller) {
       throw new AppError(403, "Vendedor nao encontrado");
     }
@@ -260,7 +169,7 @@ export class ProductService {
   }
 
   private async ensureCategory(categoryId: string) {
-    const category = await prisma.category.findFirst({ where: { id: categoryId, active: true } });
+    const category = await this.productRepository.findActiveCategory(categoryId);
     if (!category) {
       throw new AppError(400, "Categoria invalida");
     }

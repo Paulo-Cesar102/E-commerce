@@ -3,10 +3,9 @@ import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { formatPrice } from "../lib/format";
+import { imageUrl, productFallbackImage, useFallbackImage } from "../lib/images";
 import { useAuthStore } from "../store/auth";
 import type { Product } from "../types";
-
-const fallback = "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=80";
 
 export function ProductCard({ product }: { product: Product }) {
   const navigate = useNavigate();
@@ -33,7 +32,7 @@ export function ProductCard({ product }: { product: Product }) {
   return (
     <article className="product-card">
       <Link to={`/produto/${product.id}`} className="product-image-wrap">
-        <img src={product.images?.[0]?.url || fallback} alt={product.images?.[0]?.alt || product.name} />
+        <img src={imageUrl(product.images?.[0]?.url ?? productFallbackImage)} onError={useFallbackImage} alt={product.images?.[0]?.alt || product.name} />
         {product.stock <= 5 && product.stock > 0 && <span className="stock-chip">Últimas unidades</span>}
       </Link>
       <button className="favorite-button" aria-label="Favoritar produto"><Heart size={18} /></button>

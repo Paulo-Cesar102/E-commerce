@@ -4,6 +4,7 @@ import { ArrowRight, Check, Minus, Plus, ShieldCheck, ShoppingBag, Trash2 } from
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { formatPrice } from "../lib/format";
+import { imageUrl, useFallbackImage } from "../lib/images";
 import type { Cart, CartItem, Order } from "../types";
 import { EmptyState, ErrorState, Loader, PageHeading } from "../components/UI";
 
@@ -43,7 +44,7 @@ export function CartPage() {
           <label className="select-all"><input type="checkbox" checked={selected.length === cart.items.length} onChange={(event) => cart.items.forEach((item) => update.mutate({ id: item.id, body: { selected: event.target.checked } }))} /><span>Selecionar todos</span></label>
           {cart.items.map((item) => <article className="cart-item" key={item.id}>
             <label className="check-control"><input type="checkbox" checked={item.selected} onChange={(event) => update.mutate({ id: item.id, body: { selected: event.target.checked } })} /><span><Check size={14} /></span></label>
-            <Link to={`/produto/${item.productId}`} className="cart-item-image"><img src={item.product.images?.[0]?.url || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=500&q=80"} alt={item.product.name} /></Link>
+            <Link to={`/produto/${item.productId}`} className="cart-item-image"><img src={imageUrl(item.product.images?.[0]?.url)} onError={useFallbackImage} alt={item.product.name} /></Link>
             <div className="cart-item-info"><span className="product-category">{item.product.category?.name ?? "Vitrine"}</span><Link to={`/produto/${item.productId}`}><h3>{item.product.name}</h3></Link><small>{item.product.stock} unidades disponíveis</small><div className="cart-mobile-price">{formatPrice(item.product.price)}</div></div>
             <div className="cart-item-actions"><strong>{formatPrice(Number(item.product.price) * item.quantity)}</strong><div className="quantity-control"><button disabled={item.quantity <= 1} onClick={() => update.mutate({ id: item.id, body: { quantity: item.quantity - 1 } })}><Minus size={15} /></button><span>{item.quantity}</span><button disabled={item.quantity >= item.product.stock} onClick={() => update.mutate({ id: item.id, body: { quantity: item.quantity + 1 } })}><Plus size={15} /></button></div><button className="remove-button" onClick={() => remove.mutate(item.id)}><Trash2 size={16} /> Remover</button></div>
           </article>)}

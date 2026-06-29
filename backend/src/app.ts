@@ -16,10 +16,13 @@ import fs from "node:fs";
 export const app = express();
 fs.mkdirSync(uploadsDirectory, { recursive: true });
 
-app.use(helmet());
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
 app.use(express.json({ limit: "2mb" }));
-app.use("/uploads", express.static(uploadsDirectory));
+app.use("/uploads", (_req, res, next) => {
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  next();
+}, express.static(uploadsDirectory));
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,

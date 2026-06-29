@@ -17,7 +17,12 @@ orderRoutes.post("/checkout", authRequired, validateBody(checkoutSchema), asyncH
 }));
 
 orderRoutes.post("/payments/mercado-pago/webhook", validateBody(paymentWebhookSchema), asyncHandler(async (req, res) => {
-  res.json(await orderService.applyPaymentWebhook(req.body));
+  res.json(await orderService.processMercadoPagoWebhook({
+    body: req.body,
+    query: req.query,
+    signature: req.header("x-signature") ?? undefined,
+    requestId: req.header("x-request-id") ?? undefined,
+  }));
 }));
 
 orderRoutes.patch("/:id/status", authRequired, sellerRequired, validateBody(updateOrderStatusSchema), asyncHandler(async (req, res) => {

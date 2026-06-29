@@ -30,6 +30,9 @@ export const registerChatSocket = (io: Server) => {
   io.on("connection", (socket) => {
     socket.on("chat:join", async (chatId: string) => {
       try {
+        if (typeof chatId !== "string") {
+          throw new Error("Chat invalido");
+        }
         await chatService.ensureAccess(socket.data.userId, chatId);
         await socket.join(`chat:${chatId}`);
       } catch {
@@ -39,6 +42,9 @@ export const registerChatSocket = (io: Server) => {
 
     socket.on("chat:message", async (payload: { chatId: string; content: string }) => {
       try {
+        if (!payload || typeof payload.chatId !== "string" || typeof payload.content !== "string") {
+          throw new Error("Mensagem invalida");
+        }
         const message = await chatService.sendMessage(socket.data.userId, payload.chatId, payload.content);
         io.to(`chat:${payload.chatId}`).emit("chat:message", message);
       } catch {

@@ -2,9 +2,9 @@ import crypto from "node:crypto";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import type { SignOptions } from "jsonwebtoken";
-import prisma from "../../prisma/prisma.js";
 import { env } from "../config/env.js";
 import { AppError } from "../errors/AppError.js";
+import { AuthRepository } from "../repository/AuthRepository.js";
 
 type RegisterInput = {
   name: string;
@@ -15,6 +15,8 @@ type RegisterInput = {
 };
 
 export class AuthService {
+  constructor(private readonly authRepository = new AuthRepository()) {}
+
   private hashToken(token: string) {
     return crypto.createHash("sha256").update(token).digest("hex");
   }
@@ -31,19 +33,17 @@ export class AuthService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + env.REFRESH_TOKEN_EXPIRES_DAYS);
 
-    await prisma.refreshToken.create({
-      data: {
-        userId,
-        tokenHash: this.hashToken(refreshToken),
-        expiresAt,
-      },
+    await this.authRepository.createRefreshToken({
+      userId,
+      tokenHash: this.hashToken(refreshToken),
+      expiresAt,
     });
 
     return refreshToken;
   }
 
   async register(input: RegisterInput) {
-    const exists = await prisma.user.findUnique({ where: { email: input.email } });
+    const exists = await this.authRepository.findUserByEmail(input.email);
     if (exists) {
       throw new AppError(409, "Email ja cadastrado");
     }
@@ -59,10 +59,7 @@ export class AuthService {
         : {}),
     };
 
-    const user = await prisma.user.create({
-      data,
-      select: { id: true, name: true, email: true, role: true },
-    });
+    const user = await this.authRepository.createUser(data);
 
     return {
       user,
@@ -72,7 +69,7 @@ export class AuthService {
   }
 
   async login(email: string, password: string) {
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await this.authRepository.findUserByEmail(email);
     if (!user || !(await bcrypt.compare(password, user.password))) {
       throw new AppError(401, "Credenciais invalidas");
     }
@@ -85,19 +82,16 @@ export class AuthService {
   }
 
   async refresh(refreshToken: string) {
-    const stored = await prisma.refreshToken.findUnique({
-      where: { tokenHash: this.hashToken(refreshToken) },
-      include: { user: true },
-    });
+    const stored = await this.authRepository.findRefreshToken(this.hashToken(refreshToken));
 
     if (!stored || stored.revokedAt || stored.expiresAt < new Date()) {
       throw new AppError(401, "Refresh token invalido");
     }
 
-    await prisma.refreshToken.update({
-      where: { id: stored.id },
-      data: { revokedAt: new Date() },
-    });
+    const revoked = await this.authRepository.revokeActiveRefreshToken(stored.id);
+    if (revoked.count !== 1) {
+      throw new AppError(401, "Refresh token invalido");
+    }
 
     const user = stored.user;
     return {

@@ -6,11 +6,12 @@ export const checkoutSchema = z.object({
 });
 
 export const paymentWebhookSchema = z.object({
-  orderId: z.string().uuid(),
-  providerRef: z.string().optional(),
-  status: z.enum(["APPROVED", "REJECTED", "CANCELED", "REFUNDED"]),
-  rawPayload: z.unknown().optional(),
-});
+  data: z
+    .object({
+      id: z.union([z.string(), z.number()]).optional(),
+    })
+    .optional(),
+}).passthrough();
 
 export const updateOrderStatusSchema = z.object({
   status: z.enum(["PREPARING", "SHIPPED", "DELIVERED", "CANCELED", "REFUNDED"]),

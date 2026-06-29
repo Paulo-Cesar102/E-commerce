@@ -4,13 +4,13 @@ import { Check, ChevronRight, Heart, MessageCircle, Minus, Plus, ShieldCheck, Sh
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { formatDate, formatPrice } from "../lib/format";
+import { imageUrl, productFallbackImage, useFallbackImage } from "../lib/images";
 import { useAuthStore } from "../store/auth";
 import type { Product } from "../types";
 import { ErrorState, Loader } from "../components/UI";
 import { ProductCard } from "../components/ProductCard";
 
 type ProductDetail = { product: Product; related: Product[] };
-const fallback = "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=1200&q=80";
 
 export function ProductPage() {
   const { id = "" } = useParams();
@@ -42,7 +42,7 @@ export function ProductPage() {
   if (isLoading) return <Loader label="Abrindo produto" />;
   if (error || !data) return <div className="page-container"><ErrorState message={(error as Error)?.message} /></div>;
   const { product, related } = data;
-  const images = product.images.length ? product.images : [{ url: fallback, alt: product.name }];
+  const images = product.images.length ? product.images : [{ url: productFallbackImage, alt: product.name }];
   const rating = product.reviews?.length ? product.reviews.reduce((sum, review) => sum + review.rating, 0) / product.reviews.length : 0;
 
   return (
@@ -50,8 +50,8 @@ export function ProductPage() {
       <div className="breadcrumbs"><Link to="/">Início</Link><ChevronRight size={14} /><Link to={`/buscar?categoryId=${product.categoryId}`}>{product.category?.name}</Link><ChevronRight size={14} /><span>{product.name}</span></div>
       <section className="product-detail">
         <div className="product-gallery">
-          <div className="product-thumbs">{images.map((image, index) => <button key={index} className={activeImage === index ? "active" : ""} onClick={() => setActiveImage(index)}><img src={image.url} alt="" /></button>)}</div>
-          <div className="product-main-image"><img src={images[activeImage]?.url} alt={images[activeImage]?.alt || product.name} /></div>
+          <div className="product-thumbs">{images.map((image, index) => <button key={index} className={activeImage === index ? "active" : ""} onClick={() => setActiveImage(index)}><img src={imageUrl(image.url)} onError={useFallbackImage} alt="" /></button>)}</div>
+          <div className="product-main-image"><img src={imageUrl(images[activeImage]?.url)} onError={useFallbackImage} alt={images[activeImage]?.alt || product.name} /></div>
         </div>
         <div className="product-info">
           <span className="product-category">{product.category?.name}</span>
