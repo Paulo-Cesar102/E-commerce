@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Product" ADD COLUMN     "averageRating" DECIMAL(3,2) NOT NULL DEFAULT 0,
+ADD COLUMN     "ratingCount" INTEGER NOT NULL DEFAULT 0;

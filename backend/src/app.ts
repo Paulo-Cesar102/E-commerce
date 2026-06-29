@@ -1,0 +1,39 @@
+import express from "express";
+import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
+import { env } from "./config/env.js";
+import { errorHandler } from "./middlewares/errorHandler.js";
+import { authRoutes } from "./routes/auth.routes.js";
+import { productRoutes } from "./routes/product.routes.js";
+import { cartRoutes } from "./routes/cart.routes.js";
+import { orderRoutes } from "./routes/order.routes.js";
+import { sellerRoutes } from "./routes/seller.routes.js";
+import { chatRoutes } from "./routes/chat.routes.js";
+import { uploadsDirectory } from "./middlewares/upload.js";
+import fs from "node:fs";
+
+export const app = express();
+fs.mkdirSync(uploadsDirectory, { recursive: true });
+
+app.use(helmet());
+app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
+app.use(express.json({ limit: "2mb" }));
+app.use("/uploads", express.static(uploadsDirectory));
+app.use(
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 100,
+    standardHeaders: true,
+    legacyHeaders: false,
+  }),
+);
+
+app.get("/health", (_req, res) => res.json({ ok: true }));
+app.use("/auth", authRoutes);
+app.use("/products", productRoutes);
+app.use("/cart", cartRoutes);
+app.use("/orders", orderRoutes);
+app.use("/seller", sellerRoutes);
+app.use("/chats", chatRoutes);
+app.use(errorHandler);
