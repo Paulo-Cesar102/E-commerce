@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { validateBody } from "../middlewares/validate.js";
-import { loginSchema, refreshSchema, registerSchema, requestPasswordResetSchema, resetPasswordSchema } from "../schemas/auth.schema.js";
+import { googleLoginSchema, loginSchema, refreshSchema, registerSchema, requestPasswordResetSchema, resetPasswordSchema } from "../schemas/auth.schema.js";
 import { AuthService } from "../services/AuthService.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import rateLimit from "express-rate-limit";
@@ -27,6 +27,16 @@ authRoutes.post(
   loginLimit, validateBody(loginSchema),
   asyncHandler(async (req, res) => {
     const session = await authService.login(req.body.email, req.body.password);
+    res.cookie(refreshCookie, session.refreshToken, cookieOptions).json({ user: session.user, accessToken: session.accessToken });
+  }),
+);
+
+authRoutes.post(
+  "/google",
+  loginLimit,
+  validateBody(googleLoginSchema),
+  asyncHandler(async (req, res) => {
+    const session = await authService.loginWithGoogle(req.body.credential);
     res.cookie(refreshCookie, session.refreshToken, cookieOptions).json({ user: session.user, accessToken: session.accessToken });
   }),
 );

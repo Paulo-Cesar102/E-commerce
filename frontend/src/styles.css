@@ -297,6 +297,11 @@ main { min-height: 65vh; }
 .role-selector button { min-height: 39px; border: 0; background: transparent; border-radius: 3px; font-weight: 750; display: flex; align-items: center; justify-content: center; gap: 6px; }
 .role-selector button.active { color: #fff; background: var(--ink); }
 .auth-submit { margin-top: 22px; }
+.auth-divider { display: flex; align-items: center; gap: 12px; margin: 22px 0 16px; color: var(--muted); font-size: 12px; }
+.auth-divider::before, .auth-divider::after { content: ""; height: 1px; flex: 1; background: var(--line); }
+.google-login { display: flex; justify-content: center; min-height: 40px; }
+.google-login > div { width: 100%; }
+.google-login iframe { max-width: 100%; }
 .auth-security { margin-top: 13px; display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--muted); font-size: 11px; }
 .auth-switch { margin-top: 27px; text-align: center; color: var(--muted); }
 .auth-switch a { color: var(--blue); font-weight: 800; }
