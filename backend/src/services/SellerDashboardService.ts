@@ -32,7 +32,7 @@ export class SellerDashboardService {
     };
   }
 
-  async updateSettings(userId: string, input: { storeName: string; description?: string }) {
+  async updateSettings(userId: string, input: { storeName: string; description?: string; postalCode: string }) {
     const seller = await this.sellerDashboardRepository.findSellerByUserId(userId);
     if (!seller) {
       throw new AppError(403, "Vendedor nao encontrado");

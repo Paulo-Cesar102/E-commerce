@@ -19,6 +19,7 @@ type ProductInput = {
   stock: number;
   images?: { url: string; alt?: string }[];
   options?: { type: string; value: string }[];
+  variants?: { sku: string; attributes: Record<string, string>; price?: number; stock: number }[];
 };
 
 export class ProductService {
@@ -123,6 +124,17 @@ export class ProductService {
             options: {
               deleteMany: {},
               create: input.options,
+            },
+          }
+        : {}),
+      ...(input.variants
+        ? {
+            variants: {
+              upsert: input.variants.map((variant) => ({
+                where: { sku: variant.sku },
+                update: { attributes: variant.attributes, ...(variant.price !== undefined ? { price: variant.price } : {}), stock: variant.stock, active: true },
+                create: variant,
+              })),
             },
           }
         : {}),

@@ -1,9 +1,12 @@
 import { z } from "zod";
 
 export const checkoutSchema = z.object({
-  zipCode: z.string().min(8).optional(),
+  addressId: z.string().uuid(),
   itemIds: z.array(z.string().uuid()).optional(),
 });
+
+export const cancelOrderSchema = z.object({ reason: z.string().min(3).max(500) });
+export const returnOrderSchema = z.object({ reason: z.string().min(3).max(500) });
 
 export const paymentWebhookSchema = z.object({
   data: z

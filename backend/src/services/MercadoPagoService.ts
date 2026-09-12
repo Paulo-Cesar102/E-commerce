@@ -55,11 +55,7 @@ export class MercadoPagoService {
 
   async createPreference(input: PreferenceInput) {
     if (!env.MERCADO_PAGO_ACCESS_TOKEN) {
-      return {
-        providerRef: `local-${input.orderId}`,
-        initPoint: null,
-        sandboxInitPoint: null,
-      };
+      throw new AppError(503, "Pagamento indisponivel: configure o Mercado Pago");
     }
 
     const response = await fetch("https://api.mercadopago.com/checkout/preferences", {
@@ -88,6 +84,12 @@ export class MercadoPagoService {
       initPoint: data.init_point ?? null,
       sandboxInitPoint: data.sandbox_init_point ?? null,
     };
+  }
+
+  async refundPayment(paymentId: string) {
+    if (!env.MERCADO_PAGO_ACCESS_TOKEN) throw new AppError(503, "Pagamento indisponivel: configure o Mercado Pago");
+    const response = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}/refunds`, { method: "POST", headers: { Authorization: `Bearer ${env.MERCADO_PAGO_ACCESS_TOKEN}` } });
+    if (!response.ok) throw new AppError(502, "Nao foi possivel solicitar o estorno no Mercado Pago");
   }
 
   async getPayment(paymentId: string) {

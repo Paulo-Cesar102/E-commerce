@@ -6,7 +6,7 @@ export class CartRepository {
       where: { id: cartId },
       include: {
         items: {
-          include: { product: { include: { images: { take: 1, orderBy: { position: "asc" } } } } },
+          include: { product: { include: { images: { take: 1, orderBy: { position: "asc" } } } }, variant: true },
           orderBy: { createdAt: "desc" },
         },
       },
@@ -24,18 +24,17 @@ export class CartRepository {
   findActiveProduct(productId: string) {
     return prisma.product.findFirst({ where: { id: productId, status: "ACTIVE" } });
   }
+  findActiveVariant(productId: string, variantId: string) { return prisma.productVariant.findFirst({ where: { id: variantId, productId, active: true } }); }
 
-  upsertItem(cartId: string, productId: string, quantity: number) {
-    return prisma.cartItem.upsert({
-      where: { cartId_productId: { cartId, productId } },
-      update: { quantity: { increment: quantity }, selected: true },
-      create: { cartId, productId, quantity },
-    });
+  async upsertItem(cartId: string, productId: string, quantity: number, variantId?: string) {
+    const existing = await prisma.cartItem.findFirst({ where: { cartId, productId, variantId: variantId ?? null } });
+    return existing ? prisma.cartItem.update({ where: { id: existing.id }, data: { quantity: { increment: quantity }, selected: true } }) : prisma.cartItem.create({ data: { cartId, productId, quantity, ...(variantId ? { variantId } : {}) } });
   }
 
   findOwnedItem(userId: string, itemId: string) {
     return prisma.cartItem.findFirst({
       where: { id: itemId, cart: { userId } },
+      include: { product: true, variant: true },
     });
   }
 

@@ -2,15 +2,17 @@ import crypto from "node:crypto";
 import path from "node:path";
 import multer from "multer";
 import { AppError } from "../errors/AppError.js";
+import { env } from "../config/env.js";
 
 export const uploadsDirectory = path.resolve(process.cwd(), "uploads");
 
-const storage = multer.diskStorage({
+const diskStorage = multer.diskStorage({
   destination: uploadsDirectory,
   filename: (_req, file, callback) => {
     callback(null, `${crypto.randomUUID()}${path.extname(file.originalname).toLowerCase()}`);
   },
 });
+const storage = env.STORAGE_DRIVER === "s3" ? multer.memoryStorage() : diskStorage;
 
 export const uploadProductImages = multer({
   storage,

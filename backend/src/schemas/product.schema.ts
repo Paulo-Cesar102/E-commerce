@@ -4,6 +4,7 @@ const optionSchema = z.object({
   type: z.enum(["size", "color", "flavor"]),
   value: z.string().min(1),
 });
+const variantSchema = z.object({ sku: z.string().min(1).max(80), attributes: z.record(z.string(), z.string()), price: z.coerce.number().positive().optional(), stock: z.coerce.number().int().min(0) });
 
 export const productQuerySchema = z.object({
   q: z.string().optional(),
@@ -22,6 +23,7 @@ export const createProductSchema = z.object({
   stock: z.coerce.number().int().min(0),
   images: z.array(z.object({ url: z.url(), alt: z.string().optional() })).default([]),
   options: z.array(optionSchema).default([]),
+  variants: z.array(variantSchema).default([]),
 });
 
 export const updateProductSchema = createProductSchema.partial().extend({

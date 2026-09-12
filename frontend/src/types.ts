@@ -37,6 +37,7 @@ export type Product = {
   seller?: { id: string; storeName: string; description?: string; userId?: string };
   images: ProductImage[];
   options?: { id: string; type: string; value: string }[];
+  variants?: { id: string; sku: string; attributes: Record<string, string>; price?: string | number; stock: number; active: boolean }[];
   reviews?: Review[];
 };
 
@@ -54,6 +55,8 @@ export type CartItem = {
   selected: boolean;
   productId: string;
   product: Product;
+  variantId?: string;
+  variant?: NonNullable<Product["variants"]>[number];
 };
 
 export type Cart = {
@@ -72,16 +75,24 @@ export type OrderStatus =
 
 export type Order = {
   id: string;
+  subtotal?: string | number;
+  shippingCost?: string | number;
+  discount?: string | number;
+  shippingMethod?: string;
   total: string | number;
   status: OrderStatus;
   deliveryEstimateDate?: string;
   correiosTrackingCode?: string;
+  shipment?: { provider: string; service: string; status: string; trackingCode?: string; quotedDays?: number };
   mercadoPagoPreference?: string;
   createdAt: string;
   items: Array<{
     id: string;
     quantity: number;
     unitPrice: string | number;
+    productName?: string;
+    productSku?: string;
+    imageUrl?: string;
     product?: Product;
   }>;
   customer?: Pick<User, "id" | "name" | "email">;

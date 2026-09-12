@@ -5,9 +5,8 @@ import type { User } from "../types";
 type AuthState = {
   user: User | null;
   accessToken: string | null;
-  refreshToken: string | null;
-  setSession: (session: { user: User; accessToken: string; refreshToken: string }) => void;
-  updateTokens: (accessToken: string, refreshToken: string) => void;
+  setSession: (session: { user: User; accessToken: string }) => void;
+  updateAccessToken: (accessToken: string) => void;
   logout: () => void;
 };
 
@@ -16,10 +15,9 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       user: null,
       accessToken: null,
-      refreshToken: null,
       setSession: (session) => set(session),
-      updateTokens: (accessToken, refreshToken) => set({ accessToken, refreshToken }),
-      logout: () => set({ user: null, accessToken: null, refreshToken: null }),
+      updateAccessToken: (accessToken) => set({ accessToken }),
+      logout: () => set({ user: null, accessToken: null }),
     }),
     { name: "vitrine-session" },
   ),

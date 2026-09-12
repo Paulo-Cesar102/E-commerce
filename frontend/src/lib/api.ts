@@ -18,10 +18,10 @@ export class ApiError extends Error {
   }
 }
 
-const http = axios.create({ baseURL: API_URL });
+const http = axios.create({ baseURL: API_URL, withCredentials: true });
 
 export async function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
-  const { accessToken, refreshToken, updateTokens, logout } = useAuthStore.getState();
+  const { accessToken, updateAccessToken, logout } = useAuthStore.getState();
   const { auth, retry, body, ...requestOptions } = options;
   const headers = { ...options.headers } as Record<string, string>;
   const isFormData = requestOptions.data instanceof FormData;
@@ -42,13 +42,10 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
   } catch (caught) {
     const error = caught as AxiosError<{ message?: string }>;
 
-    if (error.response?.status === 401 && retry !== false && refreshToken) {
+    if (error.response?.status === 401 && retry !== false) {
       try {
-        const response = await http.post<{ accessToken: string; refreshToken: string }>(
-          "/auth/refresh",
-          { refreshToken },
-        );
-        updateTokens(response.data.accessToken, response.data.refreshToken);
+        const response = await http.post<{ accessToken: string }>("/auth/refresh");
+        updateAccessToken(response.data.accessToken);
         return api<T>(path, { ...options, retry: false });
       } catch {
         logout();

@@ -5,7 +5,7 @@ import { api } from "../lib/api";
 import { useAuthStore } from "../store/auth";
 import type { User } from "../types";
 
-type AuthResponse = { user: User; accessToken: string; refreshToken: string };
+type AuthResponse = { user: User; accessToken: string };
 
 export function AuthPage({ mode }: { mode: "login" | "register" }) {
   const navigate = useNavigate();
@@ -16,7 +16,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
   const [seller, setSeller] = useState(params.get("tipo") === "vendedor");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [form, setForm] = useState({ name: "", email: "", password: "", storeName: "" });
+  const [form, setForm] = useState({ name: "", email: "", password: "", storeName: "", acceptTerms: false });
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -26,7 +26,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
       const response = await api<AuthResponse>(mode === "login" ? "/auth/login" : "/auth/register", {
         method: "POST",
         auth: false,
-        body: JSON.stringify(mode === "login" ? { email: form.email, password: form.password } : { name: form.name, email: form.email, password: form.password, role: seller ? "SELLER" : "CUSTOMER", ...(seller ? { storeName: form.storeName } : {}) }),
+        body: JSON.stringify(mode === "login" ? { email: form.email, password: form.password } : { name: form.name, email: form.email, password: form.password, role: seller ? "SELLER" : "CUSTOMER", acceptTerms: form.acceptTerms, ...(seller ? { storeName: form.storeName } : {}) }),
       });
       setSession(response);
       const target = (location.state as { from?: string } | null)?.from;
@@ -57,6 +57,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
           {mode === "register" && seller && <label>Nome da loja<input required minLength={2} value={form.storeName} onChange={(event) => setForm({ ...form, storeName: event.target.value })} placeholder="Ex.: Casa Aurora" /></label>}
           <label>E-mail<input required type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} placeholder="voce@email.com" /></label>
           <label>Senha<div className="password-input"><input required minLength={mode === "register" ? 6 : 1} type={showPassword ? "text" : "password"} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder="Sua senha" /><button type="button" onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></label>
+          {mode === "register" && <label><input required type="checkbox" checked={form.acceptTerms} onChange={(event) => setForm({ ...form, acceptTerms: event.target.checked })} /> Li e aceito os termos de uso e a política de privacidade.</label>}
           {error && <p className="form-error">{error}</p>}
           <button className="button button-primary full auth-submit" disabled={loading}>{loading ? "Só um instante..." : mode === "login" ? "Entrar" : "Criar minha conta"} <ArrowRight size={18} /></button>
           <div className="auth-security"><LockKeyhole size={15} /> Seus dados são protegidos</div>

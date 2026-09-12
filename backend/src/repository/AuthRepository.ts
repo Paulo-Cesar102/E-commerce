@@ -42,4 +42,11 @@ export class AuthRepository {
       data: { revokedAt: new Date() },
     });
   }
+  createPasswordResetToken(data: { userId: string; tokenHash: string; expiresAt: Date }) { return prisma.passwordResetToken.create({ data }); }
+  findPasswordResetToken(tokenHash: string) { return prisma.passwordResetToken.findUnique({ where: { tokenHash }, include: { user: true } }); }
+  consumePasswordResetToken(id: string) { return prisma.passwordResetToken.update({ where: { id }, data: { usedAt: new Date() } }); }
+  updatePassword(userId: string, password: string) { return prisma.user.update({ where: { id: userId }, data: { password } }); }
+  createEmailVerificationToken(data: { userId: string; tokenHash: string; expiresAt: Date }) { return prisma.emailVerificationToken.create({ data }); }
+  findEmailVerificationToken(tokenHash: string) { return prisma.emailVerificationToken.findUnique({ where: { tokenHash }, include: { user: true } }); }
+  consumeEmailVerificationToken(id: string, userId: string) { return prisma.$transaction([prisma.emailVerificationToken.update({ where: { id }, data: { usedAt: new Date() } }), prisma.user.update({ where: { id: userId }, data: { emailVerifiedAt: new Date() } })]); }
 }

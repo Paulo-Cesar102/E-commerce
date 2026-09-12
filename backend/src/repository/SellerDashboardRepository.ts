@@ -12,7 +12,7 @@ export class SellerDashboardRepository {
         select: { total: true, createdAt: true },
         orderBy: { createdAt: "asc" },
       }),
-      prisma.product.findMany({ where: { sellerId }, include: { category: true, images: { take: 1 } } }),
+      prisma.product.findMany({ where: { sellerId }, include: { category: true, images: { take: 1 }, variants: { where: { active: true } } } }),
       prisma.order.findMany({
         where: { sellerId },
         include: { customer: { select: { id: true, name: true, email: true } }, items: true },
@@ -26,11 +26,12 @@ export class SellerDashboardRepository {
     ]);
   }
 
-  updateSettings(sellerId: string, input: { storeName: string; description?: string }) {
+  updateSettings(sellerId: string, input: { storeName: string; description?: string; postalCode: string }) {
     return prisma.sellerProfile.update({
       where: { id: sellerId },
       data: {
         storeName: input.storeName,
+        postalCode: input.postalCode,
         ...(input.description !== undefined ? { description: input.description } : {}),
       },
     });

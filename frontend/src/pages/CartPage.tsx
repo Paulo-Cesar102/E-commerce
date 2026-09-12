@@ -11,8 +11,9 @@ import { EmptyState, ErrorState, Loader, PageHeading } from "../components/UI";
 export function CartPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [zipCode, setZipCode] = useState("");
+  const [addressId, setAddressId] = useState("");
   const { data: cart, isLoading, error } = useQuery({ queryKey: ["cart"], queryFn: () => api<Cart>("/cart") });
+  const { data: addresses = [] } = useQuery({ queryKey: ["addresses"], queryFn: () => api<{ id: string; recipient: string; street: string; number: string; city: string; state: string; postalCode: string; isDefault: boolean }[]>("/addresses") });
   const update = useMutation({
     mutationFn: ({ id, body }: { id: string; body: Partial<CartItem> }) => api(`/cart/items/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cart"] }),
@@ -22,7 +23,7 @@ export function CartPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cart"] }),
   });
   const checkout = useMutation({
-    mutationFn: () => api<Order[]>("/orders/checkout", { method: "POST", body: JSON.stringify({ zipCode: zipCode || undefined, itemIds: selected.map((item) => item.id) }) }),
+    mutationFn: () => api<Order[]>("/orders/checkout", { method: "POST", body: JSON.stringify({ addressId: addressId || addresses.find((address) => address.isDefault)?.id, itemIds: selected.map((item) => item.id) }) }),
     onSuccess: (orders) => {
       queryClient.invalidateQueries({ queryKey: ["cart"] });
       const paymentUrl = orders.find((order) => order.mercadoPagoPreference)?.mercadoPagoPreference;
@@ -53,10 +54,10 @@ export function CartPage() {
           <h2>Resumo do pedido</h2>
           <div className="summary-line"><span>Produtos selecionados</span><strong>{selected.reduce((sum, item) => sum + item.quantity, 0)}</strong></div>
           <div className="summary-line"><span>Subtotal</span><strong>{formatPrice(subtotal)}</strong></div>
-          <div className="shipping-box"><label htmlFor="zip">Calcular prazo de entrega</label><div><input id="zip" value={zipCode} onChange={(event) => setZipCode(event.target.value.replace(/\D/g, "").slice(0, 8))} placeholder="00000-000" /><button>OK</button></div></div>
+          <div className="shipping-box"><label htmlFor="address">Endereço de entrega</label>{addresses.length ? <select id="address" value={addressId} onChange={(event) => setAddressId(event.target.value)}><option value="">Usar endereço principal</option>{addresses.map((address) => <option key={address.id} value={address.id}>{address.street}, {address.number} — {address.city}/{address.state}</option>)}</select> : <Link to="/enderecos">Cadastre um endereço antes de pagar</Link>}</div>
           <div className="summary-total"><span>Total</span><strong>{formatPrice(subtotal)}</strong><small>em até 10x de {formatPrice(subtotal / 10)}</small></div>
           {checkout.error && <p className="form-error">{(checkout.error as Error).message}</p>}
-          <button className="button button-primary full" disabled={!selected.length || checkout.isPending} onClick={() => checkout.mutate()}><ShoppingBag size={18} /> {checkout.isPending ? "Processando..." : "Ir para pagamento"}</button>
+          <button className="button button-primary full" disabled={!selected.length || !addresses.length || checkout.isPending} onClick={() => checkout.mutate()}><ShoppingBag size={18} /> {checkout.isPending ? "Processando..." : "Ir para pagamento"}</button>
           <div className="secure-note"><ShieldCheck size={18} /><span>Pagamento seguro processado pelo Mercado Pago</span></div>
         </aside>
       </div>

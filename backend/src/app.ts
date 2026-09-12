@@ -10,10 +10,13 @@ import { cartRoutes } from "./routes/cart.routes.js";
 import { orderRoutes } from "./routes/order.routes.js";
 import { sellerRoutes } from "./routes/seller.routes.js";
 import { chatRoutes } from "./routes/chat.routes.js";
+import { addressRoutes } from "./routes/address.routes.js";
+import { wishlistRoutes } from "./routes/wishlist.routes.js";
 import { uploadsDirectory } from "./middlewares/upload.js";
 import fs from "node:fs";
 
 export const app = express();
+if (env.TRUST_PROXY) app.set("trust proxy", 1);
 fs.mkdirSync(uploadsDirectory, { recursive: true });
 
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
@@ -39,4 +42,6 @@ app.use("/cart", cartRoutes);
 app.use("/orders", orderRoutes);
 app.use("/seller", sellerRoutes);
 app.use("/chats", chatRoutes);
+app.use("/addresses", addressRoutes);
+app.use("/wishlist", wishlistRoutes);
 app.use(errorHandler);

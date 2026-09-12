@@ -1,0 +1,10 @@
+import { Router } from "express";
+import prisma from "../../prisma/prisma.js";
+import { authRequired } from "../middlewares/auth.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { AppError } from "../errors/AppError.js";
+export const wishlistRoutes = Router();
+wishlistRoutes.use(authRequired);
+wishlistRoutes.get("/", asyncHandler(async (req, res) => res.json(await prisma.wishlistItem.findMany({ where: { userId: req.user!.sub }, include: { product: { include: { images: { take: 1, orderBy: { position: "asc" } }, category: true } } }, orderBy: { createdAt: "desc" } }))));
+wishlistRoutes.post("/:productId", asyncHandler(async (req, res) => { const product = await prisma.product.findFirst({ where: { id: String(req.params.productId), status: "ACTIVE" } }); if (!product) throw new AppError(404, "Produto nao encontrado"); res.status(201).json(await prisma.wishlistItem.upsert({ where: { userId_productId: { userId: req.user!.sub, productId: product.id } }, update: {}, create: { userId: req.user!.sub, productId: product.id } })); }));
+wishlistRoutes.delete("/:productId", asyncHandler(async (req, res) => { await prisma.wishlistItem.deleteMany({ where: { userId: req.user!.sub, productId: String(req.params.productId) } }); res.status(204).send(); }));

@@ -5,6 +5,7 @@ import { createProductSchema, productQuerySchema, reviewSchema, updateProductSch
 import { ProductService } from "../services/ProductService.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { uploadProductImages } from "../middlewares/upload.js";
+import { FileStorageService } from "../services/FileStorageService.js";
 
 export const productRoutes = Router();
 const productService = new ProductService();
@@ -21,15 +22,11 @@ productRoutes.get("/stores/:sellerId", asyncHandler(async (req, res) => {
   res.json(await productService.store(String(req.params.sellerId)));
 }));
 
-productRoutes.post("/uploads", authRequired, sellerRequired, uploadProductImages, (req, res) => {
+productRoutes.post("/uploads", authRequired, sellerRequired, uploadProductImages, asyncHandler(async (req, res) => {
   const files = req.files as Express.Multer.File[];
-  res.status(201).json({
-    images: files.map((file) => ({
-      url: `${req.protocol}://${req.get("host")}/uploads/${file.filename}`,
-      alt: file.originalname,
-    })),
-  });
-});
+  const storage = new FileStorageService();
+  res.status(201).json({ images: await storage.uploadProductFiles(files, `${req.protocol}://${req.get("host")}`) });
+}));
 
 productRoutes.get("/:id", asyncHandler(async (req, res) => {
   res.json(await productService.findById(String(req.params.id)));

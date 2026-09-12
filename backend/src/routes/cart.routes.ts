@@ -15,7 +15,7 @@ cartRoutes.get("/", asyncHandler(async (req, res) => {
 }));
 
 cartRoutes.post("/items", validateBody(addCartItemSchema), asyncHandler(async (req, res) => {
-  res.status(201).json(await cartService.add(req.user!.sub, req.body.productId, req.body.quantity));
+  res.status(201).json(await cartService.add(req.user!.sub, req.body.productId, req.body.quantity, req.body.variantId));
 }));
 
 cartRoutes.patch("/items/:id", validateBody(updateCartItemSchema), asyncHandler(async (req, res) => {

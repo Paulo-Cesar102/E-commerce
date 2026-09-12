@@ -1,0 +1,8 @@
+FROM node:24-alpine AS build
+WORKDIR /app
+COPY backend/package*.json ./
+RUN npm ci
+COPY backend ./
+RUN npx prisma generate && npm run typecheck
+EXPOSE 3000
+CMD ["sh", "-c", "npx prisma migrate deploy && npm run start"]

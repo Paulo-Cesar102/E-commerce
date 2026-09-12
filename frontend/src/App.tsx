@@ -13,6 +13,7 @@ import { AboutPage } from "./pages/AboutPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { StorePage } from "./pages/StorePage";
 import { RecommendedPage } from "./pages/RecommendedPage";
+import { AddressesPage } from "./pages/AddressesPage";
 
 const ChatPage = lazy(() => import("./pages/ChatPage").then((module) => ({ default: module.ChatPage })));
 const DashboardPage = lazy(() => import("./pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="/entrar" element={<AuthPage mode="login" />} />
         <Route path="/criar-conta" element={<AuthPage mode="register" />} />
         <Route path="/pedidos" element={<Protected><OrdersPage /></Protected>} />
+        <Route path="/enderecos" element={<Protected><AddressesPage /></Protected>} />
         <Route path="/chat" element={<Protected><Suspense fallback={<Loader label="Abrindo mensagens" />}><ChatPage /></Suspense></Protected>} />
         <Route path="/dashboard" element={<Protected seller><Suspense fallback={<Loader label="Abrindo painel" />}><DashboardPage /></Suspense></Protected>} />
         <Route path="/sobre" element={<AboutPage />} />

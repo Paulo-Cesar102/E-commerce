@@ -10,7 +10,7 @@ import type { Category, Order, Product } from "../types";
 import { ErrorState, Loader, StatusBadge } from "../components/UI";
 
 type Dashboard = {
-  seller: { id: string; storeName: string; description?: string };
+  seller: { id: string; storeName: string; description?: string; postalCode?: string };
   totalSales: number;
   revenue: number;
   profit: number;
@@ -22,6 +22,7 @@ type Dashboard = {
 
 type Tab = "overview" | "products" | "orders" | "settings";
 type DraftProductImage = Product["images"][number] & { file?: File; previewUrl?: string };
+type VariantDraft = { sku: string; size: string; color: string; flavor: string; price: string; stock: string };
 
 function revokeLocalPreviews(images: DraftProductImage[]) {
   images.forEach((image) => {
@@ -101,16 +102,19 @@ function SettingsView({ seller }: { seller: Dashboard["seller"] }) {
   const queryClient = useQueryClient();
   const [storeName, setStoreName] = useState(seller.storeName);
   const [description, setDescription] = useState(seller.description ?? "");
+  const [postalCode, setPostalCode] = useState(seller.postalCode ?? "");
   const mutation = useMutation({
-    mutationFn: () => api("/seller/settings", { method: "PATCH", body: JSON.stringify({ storeName, description }) }),
+    mutationFn: () => api("/seller/settings", { method: "PATCH", body: JSON.stringify({ storeName, description, postalCode }) }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
   });
-  return <div className="dashboard-content settings-panel"><div><span className="store-avatar large">{seller.storeName[0]}</span><div><h2>{seller.storeName}</h2><p>{seller.description ?? "Adicione uma descrição para apresentar sua loja aos clientes."}</p></div></div><form onSubmit={(event) => { event.preventDefault(); mutation.mutate(); }}><label>Nome da loja<input required minLength={2} value={storeName} onChange={(event) => setStoreName(event.target.value)} /></label><label>Descrição<textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={4} placeholder="Conte um pouco sobre sua loja" /></label>{mutation.error && <p className="form-error">{(mutation.error as Error).message}</p>}<button className="button button-primary" disabled={mutation.isPending}>{mutation.isPending ? "Salvando..." : "Salvar alterações"}</button></form></div>;
+  return <div className="dashboard-content settings-panel"><div><span className="store-avatar large">{seller.storeName[0]}</span><div><h2>{seller.storeName}</h2><p>{seller.description ?? "Adicione uma descrição para apresentar sua loja aos clientes."}</p></div></div><form onSubmit={(event) => { event.preventDefault(); mutation.mutate(); }}><label>Nome da loja<input required minLength={2} value={storeName} onChange={(event) => setStoreName(event.target.value)} /></label><label>CEP de origem dos envios<input required inputMode="numeric" value={postalCode} onChange={(event) => setPostalCode(event.target.value.replace(/\D/g, "").slice(0, 8))} /></label><label>Descrição<textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={4} placeholder="Conte um pouco sobre sua loja" /></label>{mutation.error && <p className="form-error">{(mutation.error as Error).message}</p>}<button className="button button-primary" disabled={mutation.isPending}>{mutation.isPending ? "Salvando..." : "Salvar alterações"}</button></form></div>;
 }
 
 function ProductModal({ product, categories, onClose, onDone }: { product: Product | "new"; categories: Category[]; onClose: () => void; onDone: () => void }) {
   const editing = product !== "new";
-  const [form, setForm] = useState({ name: editing ? product.name : "", description: editing ? product.description : "", price: editing ? String(product.price) : "", stock: editing ? String(product.stock) : "", categoryId: editing ? product.categoryId : categories[0]?.id ?? "", size: "", color: "", flavor: "" });
+  const firstVariant = editing ? product.variants?.[0] : undefined;
+  const [extraVariants, setExtraVariants] = useState<VariantDraft[]>(editing ? (product.variants?.slice(1).map((variant) => ({ sku: variant.sku, size: variant.attributes.size ?? "", color: variant.attributes.color ?? "", flavor: variant.attributes.flavor ?? "", price: variant.price !== undefined ? String(variant.price) : "", stock: String(variant.stock) })) ?? []) : []);
+  const [form, setForm] = useState({ name: editing ? product.name : "", description: editing ? product.description : "", price: editing ? String(product.price) : "", stock: editing ? String(product.stock) : "", categoryId: editing ? product.categoryId : categories[0]?.id ?? "", size: firstVariant?.attributes.size ?? "", color: firstVariant?.attributes.color ?? "", flavor: firstVariant?.attributes.flavor ?? "", variantSku: firstVariant?.sku ?? "", variantPrice: firstVariant?.price !== undefined ? String(firstVariant.price) : "", variantStock: firstVariant ? String(firstVariant.stock) : "" });
   const [images, setImages] = useState<DraftProductImage[]>(editing ? product.images : []);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
@@ -159,7 +163,10 @@ function ProductModal({ product, categories, onClose, onDone }: { product: Produ
     setError("");
     try {
       const uploadedImages = await uploadPendingImages();
-      return await api(editing ? `/products/${product.id}` : "/products", { method: editing ? "PATCH" : "POST", body: JSON.stringify({ categoryId: form.categoryId, name: form.name, description: form.description, price: Number(form.price), stock: Number(form.stock), images: uploadedImages, options: [["size", form.size], ["color", form.color], ["flavor", form.flavor]].filter(([, value]) => value).map(([type, value]) => ({ type, value })) }) });
+      const drafts = [{ sku: form.variantSku, size: form.size, color: form.color, flavor: form.flavor, price: form.variantPrice, stock: form.variantStock }, ...extraVariants];
+      const variants = drafts.filter((variant) => variant.sku).map((variant) => ({ sku: variant.sku, attributes: Object.fromEntries([["size", variant.size], ["color", variant.color], ["flavor", variant.flavor]].filter(([, value]) => value)), ...(variant.price ? { price: Number(variant.price) } : {}), stock: Number(variant.stock || 0) }));
+      const options = [...new Map(variants.flatMap((variant) => Object.entries(variant.attributes)).map(([type, value]) => [`${type}:${value}`, { type, value }])).values()];
+      return await api(editing ? `/products/${product.id}` : "/products", { method: editing ? "PATCH" : "POST", body: JSON.stringify({ categoryId: form.categoryId, name: form.name, description: form.description, price: Number(form.price), stock: Number(form.stock), images: uploadedImages, options, variants }) });
     } finally {
       setUploading(false);
     }
@@ -195,6 +202,11 @@ function ProductModal({ product, categories, onClose, onDone }: { product: Produ
           <label>Tamanho opcional<input value={form.size} onChange={(e) => setForm({ ...form, size: e.target.value })} placeholder="P, M, G" /></label>
           <label>Cor opcional<input value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} placeholder="Preto" /></label>
           <label className="span-2">Sabor opcional<input value={form.flavor} onChange={(e) => setForm({ ...form, flavor: e.target.value })} placeholder="Chocolate" /></label>
+          <label>SKU da variação<input value={form.variantSku} onChange={(e) => setForm({ ...form, variantSku: e.target.value })} placeholder="CAM-PRE-M" /></label>
+          <label>Preço da variação<input type="number" min="0.01" step="0.01" value={form.variantPrice} onChange={(e) => setForm({ ...form, variantPrice: e.target.value })} placeholder="Usar preço base" /></label>
+          <label className="span-2">Estoque da variação<input type="number" min="0" value={form.variantStock} onChange={(e) => setForm({ ...form, variantStock: e.target.value })} placeholder="0" /></label>
+          {extraVariants.map((variant, index) => <div className="span-2" key={index}><div className="dashboard-head-actions"><strong>Variação {index + 2}</strong><button type="button" className="button button-ghost" onClick={() => setExtraVariants((items) => items.filter((_, itemIndex) => itemIndex !== index))}>Remover</button></div><div className="modal-body"><label>SKU<input required value={variant.sku} onChange={(e) => setExtraVariants((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, sku: e.target.value } : item))} /></label><label>Tamanho<input value={variant.size} onChange={(e) => setExtraVariants((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, size: e.target.value } : item))} /></label><label>Cor<input value={variant.color} onChange={(e) => setExtraVariants((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, color: e.target.value } : item))} /></label><label>Sabor<input value={variant.flavor} onChange={(e) => setExtraVariants((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, flavor: e.target.value } : item))} /></label><label>Preço<input type="number" value={variant.price} onChange={(e) => setExtraVariants((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, price: e.target.value } : item))} /></label><label>Estoque<input type="number" required min="0" value={variant.stock} onChange={(e) => setExtraVariants((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, stock: e.target.value } : item))} /></label></div></div>)}
+          <button type="button" className="button button-ghost span-2" onClick={() => setExtraVariants((items) => [...items, { sku: "", size: "", color: "", flavor: "", price: "", stock: "0" }])}>+ Adicionar outra variação</button>
           {error && <p className="form-error span-2">{error}</p>}
         </div>
         <footer>

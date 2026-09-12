@@ -9,6 +9,7 @@ type ProductInput = {
   stock: number;
   images?: { url: string; alt?: string }[];
   options?: { type: string; value: string }[];
+  variants?: { sku: string; attributes: Record<string, string>; price?: number; stock: number }[];
 };
 
 type ProductWhere = Prisma.ProductWhereInput;
@@ -42,6 +43,7 @@ export class ProductRepository {
         seller: true,
         images: { orderBy: { position: "asc" } },
         options: true,
+        variants: { where: { active: true } },
         reviews: { include: { user: { select: { id: true, name: true } } } },
       },
     });
@@ -130,9 +132,9 @@ export class ProductRepository {
         price: input.price,
         stock: input.stock,
         images: { create: input.images?.map((image, position) => ({ ...image, position })) ?? [] },
-        options: { create: input.options ?? [] },
+        options: { create: input.options ?? [] }, variants: { create: input.variants ?? [] },
       },
-      include: { images: true, options: true },
+      include: { images: true, options: true, variants: true },
     });
   }
 
@@ -147,7 +149,7 @@ export class ProductRepository {
     return prisma.product.update({
       where: { id: productId },
       data,
-      include: { images: true, options: true },
+      include: { images: true, options: true, variants: true },
     });
   }
 

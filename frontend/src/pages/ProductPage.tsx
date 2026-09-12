@@ -25,9 +25,10 @@ export function ProductPage() {
     queryFn: () => api<ProductDetail>(`/products/${id}`, { auth: false }),
   });
   const add = useMutation({
-    mutationFn: () => api("/cart/items", { method: "POST", body: JSON.stringify({ productId: id, quantity }) }),
+    mutationFn: () => api("/cart/items", { method: "POST", body: JSON.stringify({ productId: id, quantity, ...(selectedVariant ? { variantId: selectedVariant.id } : {}) }) }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cart"] }),
   });
+  const favorite = useMutation({ mutationFn: () => api(`/wishlist/${id}`, { method: "POST" }) });
   const groupedOptions = useMemo(() => {
     return data?.product.options?.reduce<Record<string, string[]>>((acc, option) => {
       acc[option.type] = [...(acc[option.type] ?? []), option.value];
@@ -42,6 +43,9 @@ export function ProductPage() {
   if (isLoading) return <Loader label="Abrindo produto" />;
   if (error || !data) return <div className="page-container"><ErrorState message={(error as Error)?.message} /></div>;
   const { product, related } = data;
+  const selectedVariant = product.variants?.find((variant) => Object.entries(variant.attributes).every(([key, value]) => selectedOptions[key] === value));
+  const availableStock = selectedVariant?.stock ?? product.stock;
+  const optionAvailable = (type: string, value: string) => !product.variants?.length || product.variants.some((variant) => variant.active && variant.stock > 0 && variant.attributes[type] === value && Object.entries(selectedOptions).every(([selectedType, selectedValue]) => selectedType === type || variant.attributes[selectedType] === selectedValue));
   const images = product.images.length ? product.images : [{ url: productFallbackImage, alt: product.name }];
   const rating = product.reviews?.length ? product.reviews.reduce((sum, review) => sum + review.rating, 0) / product.reviews.length : 0;
 
@@ -58,12 +62,13 @@ export function ProductPage() {
           <h1>{product.name}</h1>
           <div className="detail-rating"><span><Star size={17} fill="currentColor" /> {rating ? rating.toFixed(1) : "Novo"}</span><a href="#avaliacoes">{product.reviews?.length ?? 0} avaliações</a><span>{product.stock > 0 ? "Em estoque" : "Indisponível"}</span></div>
           <p className="product-description">{product.description}</p>
-          <div className="detail-price"><strong>{formatPrice(product.price)}</strong><span>ou 10x de {formatPrice(Number(product.price) / 10)} sem juros</span></div>
-          {Object.entries(groupedOptions).map(([type, values]) => <div className="option-group" key={type}><label>{type === "size" ? "Tamanho" : type === "color" ? "Cor" : "Sabor"}</label><div>{values.map((value) => <button className={selectedOptions[type] === value ? "active" : ""} onClick={() => setSelectedOptions((current) => ({ ...current, [type]: value }))} key={value}>{value}</button>)}</div></div>)}
+          <div className="detail-price"><strong>{formatPrice(selectedVariant?.price ?? product.price)}</strong><span>ou 10x de {formatPrice(Number(selectedVariant?.price ?? product.price) / 10)} sem juros</span></div>
+          {Object.entries(groupedOptions).map(([type, values]) => <div className="option-group" key={type}><label>{type === "size" ? "Tamanho" : type === "color" ? "Cor" : "Sabor"}</label><div>{values.map((value) => <button disabled={!optionAvailable(type, value)} className={selectedOptions[type] === value ? "active" : ""} onClick={() => setSelectedOptions((current) => ({ ...current, [type]: value }))} key={value}>{value}</button>)}</div></div>)}
+          {selectedVariant && <small>SKU: {selectedVariant.sku} · {selectedVariant.stock} unidades disponíveis</small>}
           <div className="buy-row">
-            <div className="quantity-control"><button onClick={() => setQuantity(Math.max(1, quantity - 1))}><Minus size={17} /></button><span>{quantity}</span><button onClick={() => setQuantity(Math.min(product.stock, quantity + 1))}><Plus size={17} /></button></div>
-            <button className="button button-primary grow" disabled={product.stock === 0 || add.isPending} onClick={() => requireAuth(() => add.mutate())}><ShoppingBag size={19} /> {add.isSuccess ? "Adicionado" : "Adicionar ao carrinho"}</button>
-            <button className="icon-button bordered" aria-label="Favoritar"><Heart size={20} /></button>
+            <div className="quantity-control"><button onClick={() => setQuantity(Math.max(1, quantity - 1))}><Minus size={17} /></button><span>{quantity}</span><button onClick={() => setQuantity(Math.min(availableStock, quantity + 1))}><Plus size={17} /></button></div>
+            <button className="button button-primary grow" disabled={availableStock === 0 || (!!product.variants?.length && !selectedVariant) || add.isPending} onClick={() => requireAuth(() => add.mutate())}><ShoppingBag size={19} /> {add.isSuccess ? "Adicionado" : "Adicionar ao carrinho"}</button>
+            <button className="icon-button bordered" aria-label="Favoritar" disabled={favorite.isPending} onClick={() => requireAuth(() => favorite.mutate())}><Heart size={20} fill={favorite.isSuccess ? "currentColor" : "none"} /></button>
           </div>
           <button className="button button-dark full" disabled={product.stock === 0} onClick={() => requireAuth(() => add.mutate(undefined, { onSuccess: () => navigate("/carrinho") }))}>Comprar agora</button>
           <div className="purchase-benefits"><div><Truck /><span><strong>Entrega calculada no checkout</strong><small>Acompanhe pelo pedido</small></span></div><div><ShieldCheck /><span><strong>Pagamento protegido</strong><small>Ambiente seguro Mercado Pago</small></span></div></div>

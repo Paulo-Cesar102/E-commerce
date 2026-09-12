@@ -1,0 +1,13 @@
+import { Router } from "express";
+import { authRequired } from "../middlewares/auth.js";
+import { validateBody } from "../middlewares/validate.js";
+import { addressSchema } from "../schemas/address.schema.js";
+import { AddressService } from "../services/AddressService.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+export const addressRoutes = Router();
+const service = new AddressService();
+addressRoutes.use(authRequired);
+addressRoutes.get("/", asyncHandler(async (req, res) => res.json(await service.list(req.user!.sub))));
+addressRoutes.post("/", validateBody(addressSchema), asyncHandler(async (req, res) => res.status(201).json(await service.create(req.user!.sub, req.body))));
+addressRoutes.patch("/:id", validateBody(addressSchema.partial()), asyncHandler(async (req, res) => res.json(await service.update(req.user!.sub, String(req.params.id), req.body))));
+addressRoutes.delete("/:id", asyncHandler(async (req, res) => { await service.remove(req.user!.sub, String(req.params.id)); res.status(204).send(); }));
