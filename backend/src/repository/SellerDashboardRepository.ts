@@ -26,6 +26,13 @@ export class SellerDashboardRepository {
     ]);
   }
 
+  financialData(sellerId: string) {
+    return prisma.$transaction([
+      prisma.order.aggregate({ where: { sellerId, payment: { status: "APPROVED" }, status: { in: ["PAID", "PREPARING", "SHIPPED", "DELIVERED"] } }, _sum: { total: true, platformFee: true }, _count: { id: true } }),
+      prisma.withdrawal.findMany({ where: { sellerId }, orderBy: { requestedAt: "desc" }, take: 30 }),
+    ]);
+  }
+
   updateSettings(sellerId: string, input: { storeName: string; description?: string; postalCode: string }) {
     return prisma.sellerProfile.update({
       where: { id: sellerId },

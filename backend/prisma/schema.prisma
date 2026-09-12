@@ -130,6 +130,7 @@ model SellerProfile {
   products   Product[]
   orders     Order[]
   chats      Chat[]
+  withdrawals Withdrawal[]
 }
 
 model PasswordResetToken {
@@ -277,8 +278,11 @@ model Withdrawal {
   providerRef String?
   requestedAt DateTime         @default(now())
   processedAt DateTime?
+  sellerId    String?
+  seller      SellerProfile? @relation(fields: [sellerId], references: [id], onDelete: SetNull)
 
   @@index([status, requestedAt])
+  @@index([sellerId, status, requestedAt])
 }
 
 model ProductVariant {

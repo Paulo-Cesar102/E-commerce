@@ -34,7 +34,7 @@ adminRoutes.get("/overview", asyncHandler(async (_req, res) => {
     prisma.sellerProfile.findMany({ include: { user: { select: { id: true, name: true, email: true } }, _count: { select: { products: true, orders: true } } }, orderBy: { createdAt: "desc" } }),
     prisma.order.groupBy({ by: ["sellerId"], where: paidOrderWhere, _sum: { total: true, platformFee: true }, _count: { id: true } }),
     prisma.chat.findMany({ where: { status: "OPEN" }, include: { buyer: { select: { name: true, email: true } }, seller: { select: { storeName: true } }, messages: { orderBy: { createdAt: "desc" }, take: 1 } }, orderBy: { updatedAt: "desc" }, take: 30 }),
-    prisma.withdrawal.findMany({ orderBy: { requestedAt: "desc" }, take: 30 }),
+    prisma.withdrawal.findMany({ where: { sellerId: null }, orderBy: { requestedAt: "desc" }, take: 30 }),
   ]);
   const chartOrders = await prisma.order.findMany({ where: paidOrderWhere, select: { total: true, platformFee: true, createdAt: true }, orderBy: { createdAt: "asc" } });
   const salesChart = chartOrders.reduce<Record<string, { sales: number; fees: number }>>((chart, order) => { const key = order.createdAt.toISOString().slice(0, 10); const current = chart[key] ?? { sales: 0, fees: 0 }; chart[key] = { sales: current.sales + Number(order.total), fees: current.fees + Number(order.platformFee) }; return chart; }, {});

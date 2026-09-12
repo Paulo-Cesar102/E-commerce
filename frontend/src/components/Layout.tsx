@@ -105,7 +105,7 @@ export function Layout({ children }: { children: ReactNode }) {
               <MessageCircle size={21} />
               <span>Mensagens</span>
             </Link>
-            {user && <Link className="header-action hide-small" to="/notificacoes" aria-label="Notificações"><Bell size={21} /><span>Notificações</span>{notifications.some((notification) => !notification.readAt) && <span className="cart-count">!</span>}</Link>}
+            {user && <Link className="header-action notification-action" to="/notificacoes" aria-label="Notificações" title="Notificações"><span className="notification-icon"><Bell size={20} />{notifications.some((notification) => !notification.readAt) && <span className="notification-badge">!</span>}</span><span>Notificações</span></Link>}
             <Link className="cart-action" to="/carrinho" aria-label="Carrinho">
               <ShoppingBag size={22} />
               {cartCount > 0 && <span className="cart-count">{cartCount}</span>}

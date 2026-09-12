@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { BarChart3, Boxes, Check, CircleDollarSign, Edit3, MessageCircle, PackageCheck, Plus, Search, Settings, ShoppingBag, Store, Trash2, UploadCloud, X } from "lucide-react";
+import { ArrowRight, BarChart3, Boxes, Check, CircleDollarSign, Clock3, Edit3, MessageCircle, PackageCheck, Plus, Search, Settings, ShoppingBag, Store, Trash2, UploadCloud, Wallet, X } from "lucide-react";
 import clsx from "clsx";
 import { api } from "../lib/api";
 import { formatDate, formatPrice } from "../lib/format";
@@ -18,9 +18,10 @@ type Dashboard = {
   products: Product[];
   recentOrders: Order[];
   categories: Category[];
+  finance: { grossSales: string | number; platformFees: string | number; available: string | number; pending: string | number; paidOrders: number; withdrawals: Array<{ id: string; amount: string | number; status: string; requestedAt: string }> };
 };
 
-type Tab = "overview" | "products" | "orders" | "settings";
+type Tab = "overview" | "finance" | "products" | "orders" | "settings";
 type DraftProductImage = Product["images"][number] & { file?: File; previewUrl?: string };
 type VariantDraft = { sku: string; size: string; color: string; flavor: string; price: string; stock: string };
 
@@ -37,13 +38,20 @@ export function DashboardPage() {
   const { data, isLoading, error } = useQuery({ queryKey: ["dashboard"], queryFn: () => api<Dashboard>("/seller/dashboard") });
 
   if (isLoading) return <Loader label="Montando seu painel" />;
-  if (error || !data) return <div className="dashboard-error"><ErrorState message={(error as Error)?.message} /></div>;
+  if (error || !data) {
+    const message = (error as Error)?.message ?? "Não foi possível abrir o painel.";
+    if (message.includes("PENDING") || message.toLowerCase().includes("aguardando aprovacao")) {
+      return <div className="seller-approval-page"><div className="seller-approval-card"><span className="seller-approval-icon"><Clock3 size={28} /></span><span className="eyebrow">Conta em análise</span><h1>Estamos revisando sua loja</h1><p>Seu cadastro foi recebido e está aguardando aprovação administrativa. Assim que sua conta for aprovada, você poderá cadastrar produtos e começar a vender.</p><div className="seller-approval-status"><span><i /> Status atual</span><strong>Aguardando aprovação</strong></div><div className="seller-approval-actions"><a className="button button-primary" href="/">Voltar para a Vitrine <ArrowRight size={17} /></a><a className="seller-approval-link" href="/chat">Falar com o suporte</a></div></div></div>;
+    }
+    return <div className="dashboard-error"><ErrorState message={message} /></div>;
+  }
 
   return <div className="dashboard-layout">
     <aside className="dashboard-sidebar">
       <div className="dashboard-store"><span><Store size={20} /></span><div><small>Minha loja</small><strong>{data.seller.storeName}</strong></div></div>
       <nav>
         <button className={tab === "overview" ? "active" : ""} onClick={() => setTab("overview")}><BarChart3 /> Visão geral</button>
+        <button className={tab === "finance" ? "active" : ""} onClick={() => setTab("finance")}><Wallet /> Financeiro</button>
         <button className={tab === "products" ? "active" : ""} onClick={() => setTab("products")}><Boxes /> Produtos</button>
         <button className={tab === "orders" ? "active" : ""} onClick={() => setTab("orders")}><ShoppingBag /> Pedidos</button>
         <button className={tab === "settings" ? "active" : ""} onClick={() => setTab("settings")}><Settings /> Configurações</button>
@@ -51,14 +59,22 @@ export function DashboardPage() {
       <a href="/chat"><MessageCircle size={18} /> Central de mensagens</a>
     </aside>
     <section className="dashboard-main">
-      <header className="dashboard-top"><div><span className="eyebrow">Painel do vendedor</span><h1>{tab === "overview" ? "Visão geral" : tab === "products" ? "Produtos" : tab === "orders" ? "Pedidos" : "Configurações"}</h1></div>{tab === "products" && <div className="dashboard-head-actions"><span className="shared-category-note">Categorias compartilhadas com compradores</span><button className="button button-primary" onClick={() => setProductModal("new")}><Plus size={18} /> Novo produto</button></div>}</header>
+      <header className="dashboard-top"><div><span className="eyebrow">Painel do vendedor</span><h1>{tab === "overview" ? "Visão geral" : tab === "finance" ? "Financeiro" : tab === "products" ? "Produtos" : tab === "orders" ? "Pedidos" : "Configurações"}</h1></div>{tab === "products" && <div className="dashboard-head-actions"><span className="shared-category-note">Categorias compartilhadas com compradores</span><button className="button button-primary" onClick={() => setProductModal("new")}><Plus size={18} /> Novo produto</button></div>}</header>
       {tab === "overview" && <Overview data={data} onNavigate={setTab} />}
+      {tab === "finance" && <SellerFinance finance={data.finance} />}
       {tab === "products" && <Products data={data} onEdit={setProductModal} />}
       {tab === "orders" && <SellerOrders orders={data.recentOrders} />}
       {tab === "settings" && <SettingsView seller={data.seller} />}
     </section>
     {productModal && <ProductModal product={productModal} categories={data.categories} onClose={() => setProductModal(null)} onDone={() => { setProductModal(null); queryClient.invalidateQueries({ queryKey: ["dashboard"] }); }} />}
   </div>;
+}
+
+function SellerFinance({ finance }: { finance: Dashboard["finance"] }) {
+  const queryClient = useQueryClient();
+  const [amount, setAmount] = useState("");
+  const withdrawal = useMutation({ mutationFn: () => api("/seller/withdrawals", { method: "POST", body: JSON.stringify({ amount: Number(amount.replace(",", ".")) }) }), onSuccess: () => { setAmount(""); queryClient.invalidateQueries({ queryKey: ["dashboard"] }); } });
+  return <div className="dashboard-content seller-finance"><div className="metric-grid"><article><span className="metric-icon coral"><Wallet /></span><div><small>Saldo disponível</small><strong>{formatPrice(finance.available)}</strong><span>Somente vendas da sua loja</span></div></article><article><span className="metric-icon yellow"><Clock3 /></span><div><small>Saldo pendente</small><strong>{formatPrice(finance.pending)}</strong><span>Solicitações em análise</span></div></article><article><span className="metric-icon green"><CircleDollarSign /></span><div><small>Vendas aprovadas</small><strong>{formatPrice(finance.grossSales)}</strong><span>{finance.paidOrders} pedidos</span></div></article></div><section className="seller-payout-card"><div><span className="eyebrow">Repasse da sua loja</span><h2>{formatPrice(finance.available)}</h2><p>A comissão da plataforma já foi descontada deste valor.</p></div><form onSubmit={(event) => { event.preventDefault(); withdrawal.mutate(); }}><label>Valor do saque<input required min="0.01" max={Number(finance.available)} step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="R$ 0,00" /></label><button className="button button-primary" disabled={withdrawal.isPending || Number(finance.available) <= 0}><Wallet size={17} /> Solicitar saque</button></form></section><section className="dashboard-table-panel full-panel seller-withdrawals"><header><div><h2>Histórico de saques</h2><p>Acompanhe os repasses solicitados pela sua loja.</p></div><strong>{finance.withdrawals.length}</strong></header>{finance.withdrawals.length ? finance.withdrawals.map((item) => <div className="seller-withdrawal-row" key={item.id}><span><strong>{formatPrice(item.amount)}</strong><small>{new Date(item.requestedAt).toLocaleDateString("pt-BR")}</small></span><span className={`seller-payout-status seller-payout-${item.status.toLowerCase()}`}>{item.status === "REQUESTED" ? "Solicitado" : item.status === "APPROVED" ? "Aprovado" : item.status === "PAID" ? "Pago" : "Rejeitado"}</span></div>) : <div className="table-empty">Nenhum saque solicitado.</div>}</section></div>;
 }
 
 function Overview({ data, onNavigate }: { data: Dashboard; onNavigate: (tab: Tab) => void }) {
