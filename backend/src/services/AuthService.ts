@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import type { SignOptions } from "jsonwebtoken";
+import { OAuth2Client } from "google-auth-library";
 import { env } from "../config/env.js";
 import { AppError } from "../errors/AppError.js";
 import { AuthRepository } from "../repository/AuthRepository.js";
@@ -15,7 +16,16 @@ type RegisterInput = {
   acceptTerms: true;
 };
 
+type SessionUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: "CUSTOMER" | "SELLER" | "ADMIN";
+};
+
 export class AuthService {
+  private readonly googleClient = new OAuth2Client();
+
   constructor(private readonly authRepository = new AuthRepository()) {}
 
   private hashToken(token: string) {
@@ -75,6 +85,46 @@ export class AuthService {
       throw new AppError(401, "Credenciais invalidas");
     }
 
+    return {
+      user: { id: user.id, name: user.name, email: user.email, role: user.role },
+      accessToken: this.signAccessToken({ id: user.id, role: user.role }),
+      refreshToken: await this.createRefreshToken(user.id),
+    };
+  }
+
+  async loginWithGoogle(credential: string) {
+    if (!env.GOOGLE_CLIENT_ID) {
+      throw new AppError(500, "GOOGLE_CLIENT_ID nao configurado");
+    }
+
+    let payload: { email?: string; email_verified?: boolean; name?: string } | undefined;
+    try {
+      const ticket = await this.googleClient.verifyIdToken({
+        idToken: credential,
+        audience: env.GOOGLE_CLIENT_ID,
+      });
+      payload = ticket.getPayload();
+    } catch {
+      throw new AppError(401, "Credencial do Google invalida");
+    }
+
+    const email = payload?.email?.toLowerCase();
+    if (!email || !payload?.email_verified) {
+      throw new AppError(401, "O Google nao confirmou este e-mail");
+    }
+
+    let user: SessionUser | null = await this.authRepository.findUserByEmail(email);
+    if (!user) {
+      const password = await bcrypt.hash(crypto.randomBytes(48).toString("base64url"), 12);
+      user = await this.authRepository.createUser({
+        name: payload.name?.trim() || email.split("@")[0] || "Usuario",
+        email,
+        password,
+        role: "CUSTOMER",
+      });
+    }
+
+    await this.authRepository.markEmailVerified(user.id);
     return {
       user: { id: user.id, name: user.name, email: user.email, role: user.role },
       accessToken: this.signAccessToken({ id: user.id, role: user.role }),

@@ -14,6 +14,10 @@ export const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+export const googleLoginSchema = z.object({
+  credential: z.string().min(1),
+});
+
 export const refreshSchema = z.object({ refreshToken: z.string().min(20).optional() });
 export const requestPasswordResetSchema = z.object({ email: z.email() });
 export const resetPasswordSchema = z.object({ token: z.string().min(32), password: z.string().min(10) });

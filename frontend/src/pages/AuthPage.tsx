@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { ArrowRight, CheckCircle2, Eye, EyeOff, LockKeyhole, Store } from "lucide-react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { GoogleLogin } from "@react-oauth/google";
 import { api } from "../lib/api";
 import { useAuthStore } from "../store/auth";
 import type { User } from "../types";
@@ -38,6 +39,25 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
     }
   }
 
+  async function loginWithGoogle(credential: string) {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await api<AuthResponse>("/auth/google", {
+        method: "POST",
+        auth: false,
+        body: JSON.stringify({ credential }),
+      });
+      setSession(response);
+      const target = (location.state as { from?: string } | null)?.from;
+      navigate(target ?? (response.user.role === "CUSTOMER" ? "/" : "/dashboard"));
+    } catch (caught) {
+      setError((caught as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="auth-page">
       <section className="auth-visual">
@@ -62,6 +82,19 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
           <button className="button button-primary full auth-submit" disabled={loading}>{loading ? "Só um instante..." : mode === "login" ? "Entrar" : "Criar minha conta"} <ArrowRight size={18} /></button>
           <div className="auth-security"><LockKeyhole size={15} /> Seus dados são protegidos</div>
           <p className="auth-switch">{mode === "login" ? "Ainda não tem conta?" : "Já tem uma conta?"} <Link to={mode === "login" ? "/criar-conta" : "/entrar"}>{mode === "login" ? "Cadastre-se" : "Entrar"}</Link></p>
+          {mode === "login" && (
+            <>
+              <div className="auth-divider"><span>ou</span></div>
+              <div className="google-login">
+                <GoogleLogin
+                  onSuccess={(response) => { if (response.credential) void loginWithGoogle(response.credential); }}
+                  onError={() => setError("Nao foi possivel entrar com o Google. Tente novamente.")}
+                  text="signin_with"
+                  width="430"
+                />
+              </div>
+            </>
+          )}
         </form>
       </section>
     </div>
