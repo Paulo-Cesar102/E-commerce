@@ -7,6 +7,7 @@ import { useAuthStore } from "../store/auth";
 import type { User } from "../types";
 
 type AuthResponse = { user: User; accessToken: string };
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 export function AuthPage({ mode }: { mode: "login" | "register" }) {
   const navigate = useNavigate();
@@ -82,7 +83,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
           <button className="button button-primary full auth-submit" disabled={loading}>{loading ? "Só um instante..." : mode === "login" ? "Entrar" : "Criar minha conta"} <ArrowRight size={18} /></button>
           <div className="auth-security"><LockKeyhole size={15} /> Seus dados são protegidos</div>
           <p className="auth-switch">{mode === "login" ? "Ainda não tem conta?" : "Já tem uma conta?"} <Link to={mode === "login" ? "/criar-conta" : "/entrar"}>{mode === "login" ? "Cadastre-se" : "Entrar"}</Link></p>
-          {mode === "login" && (
+          {mode === "login" && googleClientId && (
             <>
               <div className="auth-divider"><span>ou</span></div>
               <div className="google-login">

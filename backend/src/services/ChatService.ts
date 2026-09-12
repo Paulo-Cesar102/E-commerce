@@ -29,7 +29,7 @@ export class ChatService {
     return this.chatRepository.create({ buyerId: userId, sellerId, ...(orderId ? { orderId } : {}) });
   }
 
-  async sendMessage(userId: string, chatId: string, content: string) {
+  async sendMessage(userId: string, chatId: string, content: string, isAdmin = false) {
     if (typeof chatId !== "string" || !chatId) {
       throw new AppError(400, "Chat invalido");
     }
@@ -39,7 +39,7 @@ export class ChatService {
       throw new AppError(400, "Mensagem deve ter entre 1 e 1000 caracteres");
     }
 
-    await this.ensureAccess(userId, chatId);
+    await this.ensureAccess(userId, chatId, isAdmin);
 
     const message = await this.chatRepository.createMessage({ chatId, senderId: userId, content: normalizedContent });
 
@@ -47,13 +47,21 @@ export class ChatService {
     return message;
   }
 
-  async ensureAccess(userId: string, chatId: string) {
-    const chat = await this.chatRepository.findAccessible(userId, chatId);
+  async ensureAccess(userId: string, chatId: string, isAdmin = false) {
+    const chat = await this.chatRepository.findAccessible(userId, chatId, isAdmin);
 
     if (!chat) {
       throw new AppError(404, "Chat nao encontrado");
     }
 
     return chat;
+  }
+
+  get(chatId: string) {
+    return this.chatRepository.findById(chatId);
+  }
+
+  close(chatId: string) {
+    return this.chatRepository.close(chatId);
   }
 }

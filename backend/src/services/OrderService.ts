@@ -19,7 +19,7 @@ export class OrderService {
     return this.orderRepository.listMine(userId);
   }
 
-  async checkout(userId: string, input: { addressId: string; itemIds?: string[] }) {
+  async checkout(userId: string, input: { addressId: string; itemIds?: string[]; couponCode?: string }) {
     const cart = await this.orderRepository.findCheckoutCart(userId, input.itemIds);
 
     if (!cart || cart.items.length === 0) {
@@ -38,8 +38,20 @@ export class OrderService {
     const cartItems = cart.items;
     const createdOrders = await this.orderRepository.transaction(async (tx) => {
       const orders = [];
+      const coupon = input.couponCode ? await this.orderRepository.findCouponForCheckout(tx, input.couponCode, userId) : null;
+      if (input.couponCode && !coupon) throw new AppError(400, "Cupom invalido");
+      if (coupon) {
+        const now = new Date();
+        if (!coupon.active || coupon.startsAt > now || (coupon.endsAt && coupon.endsAt < now)) throw new AppError(400, "Cupom fora da validade");
+        if (coupon.redemptions.length || (coupon.maxUses !== null && coupon.usedCount >= coupon.maxUses)) throw new AppError(400, "Cupom esgotado ou ja utilizado");
+      }
+      const subtotalTotal = cartItems.reduce((sum, item) => sum + Number(item.variant?.price ?? item.product.price) * item.quantity, 0);
+      if (coupon?.minOrderValue && subtotalTotal < Number(coupon.minOrderValue)) throw new AppError(400, `Pedido minimo para o cupom: ${Number(coupon.minOrderValue).toFixed(2)}`);
+      const discountTotal = coupon ? Math.min(coupon.type === "PERCENT" ? subtotalTotal * Number(coupon.value) / 100 : Number(coupon.value), subtotalTotal) : 0;
+      let discountAllocated = 0;
+      const sellerEntries = [...itemsBySeller.entries()];
 
-      for (const [sellerId, items] of itemsBySeller) {
+      for (const [sellerIndex, [sellerId, items]] of sellerEntries.entries()) {
         await this.stockService.reserve(
           tx,
           items.map((item) => ({ productId: item.productId, variantId: item.variantId, quantity: item.quantity })),
@@ -49,12 +61,15 @@ export class OrderService {
         if (!origin) throw new AppError(422, "A loja ainda nao configurou o CEP de origem para entrega");
         const quote = await this.correios.quote({ fromPostalCode: origin, toPostalCode: address.postalCode, items: items.map((item) => ({ quantity: item.quantity, unitPrice: Number(item.variant?.price ?? item.product.price) })) });
         const subtotal = items.reduce((sum, item) => sum + Number(item.variant?.price ?? item.product.price) * item.quantity, 0);
-        const total = subtotal + quote.price;
+        const discount = sellerIndex === sellerEntries.length - 1 ? discountTotal - discountAllocated : Math.round(discountTotal * subtotal / subtotalTotal * 100) / 100;
+        discountAllocated += discount;
+        const platformFee = Math.round((subtotal - discount) * env.PLATFORM_FEE_PERCENT) / 100;
+        const total = subtotal + quote.price - discount;
         const deliveryEstimateDate = new Date(); deliveryEstimateDate.setDate(deliveryEstimateDate.getDate() + quote.deliveryDays);
         const createdOrder = await this.orderRepository.createOrder(tx, {
           customerId: userId,
           sellerId,
-          subtotal, shippingCost: quote.price, discount: 0, platformFee: 0,
+          subtotal, shippingCost: quote.price, discount, platformFee,
           total,
           shippingMethod: quote.service,
           shippingAddress: { recipient: address.recipient, document: address.document, postalCode: address.postalCode, street: address.street, number: address.number, complement: address.complement, district: address.district, city: address.city, state: address.state },
@@ -72,6 +87,13 @@ export class OrderService {
         });
 
         orders.push(createdOrder);
+      }
+
+      if (coupon) {
+        const firstOrder = orders[0];
+        if (!firstOrder) throw new AppError(400, "Nao foi possivel criar o pedido");
+        const result = await this.orderRepository.reserveCoupon(tx, coupon.id, userId, firstOrder.id, coupon.maxUses);
+        if (result.count !== 1) throw new AppError(409, "Cupom esgotado, tente novamente");
       }
 
       return orders;

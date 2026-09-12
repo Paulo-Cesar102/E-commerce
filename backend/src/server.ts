@@ -13,6 +13,7 @@ const io = new Server(httpServer, {
 });
 
 registerChatSocket(io);
+app.locals.io = io;
 
 httpServer.listen(env.PORT, () => {
   console.log(`Server rodando na porta ${env.PORT}`);

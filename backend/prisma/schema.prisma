@@ -63,6 +63,13 @@ enum ChatStatus {
   CLOSED
 }
 
+enum WithdrawalStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  PAID
+}
+
 model User {
   id        String   @id @default(uuid())
   name      String
@@ -260,6 +267,18 @@ model AuditLog {
   userId String?
   user User? @relation(fields:[userId], references:[id], onDelete: SetNull)
   @@index([entityType, entityId, createdAt])
+}
+
+model Withdrawal {
+  id          String           @id @default(uuid())
+  amount      Decimal          @db.Decimal(12, 2)
+  status      WithdrawalStatus @default(REQUESTED)
+  note        String?
+  providerRef String?
+  requestedAt DateTime         @default(now())
+  processedAt DateTime?
+
+  @@index([status, requestedAt])
 }
 
 model ProductVariant {

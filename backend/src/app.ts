@@ -12,6 +12,9 @@ import { sellerRoutes } from "./routes/seller.routes.js";
 import { chatRoutes } from "./routes/chat.routes.js";
 import { addressRoutes } from "./routes/address.routes.js";
 import { wishlistRoutes } from "./routes/wishlist.routes.js";
+import { notificationRoutes } from "./routes/notification.routes.js";
+import { privacyRoutes } from "./routes/privacy.routes.js";
+import { adminRoutes } from "./routes/admin.routes.js";
 import { uploadsDirectory } from "./middlewares/upload.js";
 import fs from "node:fs";
 
@@ -44,4 +47,7 @@ app.use("/seller", sellerRoutes);
 app.use("/chats", chatRoutes);
 app.use("/addresses", addressRoutes);
 app.use("/wishlist", wishlistRoutes);
+app.use("/notifications", notificationRoutes);
+app.use("/privacy", privacyRoutes);
+app.use("/admin", adminRoutes);
 app.use(errorHandler);

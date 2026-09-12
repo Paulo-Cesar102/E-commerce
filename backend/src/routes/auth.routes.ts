@@ -5,6 +5,8 @@ import { AuthService } from "../services/AuthService.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import rateLimit from "express-rate-limit";
 import { env } from "../config/env.js";
+import { authRequired } from "../middlewares/auth.js";
+import prisma from "../../prisma/prisma.js";
 
 export const authRoutes = Router();
 const authService = new AuthService();
@@ -30,6 +32,12 @@ authRoutes.post(
     res.cookie(refreshCookie, session.refreshToken, cookieOptions).json({ user: session.user, accessToken: session.accessToken });
   }),
 );
+
+authRoutes.get("/me", authRequired, asyncHandler(async (req, res) => {
+  const user = await prisma.user.findUnique({ where: { id: req.user!.sub }, select: { id: true, name: true, email: true, role: true } });
+  if (!user) return res.status(404).json({ message: "Usuario nao encontrado" });
+  res.json({ user });
+}));
 
 authRoutes.post(
   "/google",

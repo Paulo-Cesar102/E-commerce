@@ -27,6 +27,23 @@ export class OrderRepository {
     });
   }
 
+  findCouponForCheckout(tx: PrismaTransaction, code: string, userId: string) {
+    return tx.coupon.findUnique({
+      where: { code: code.toUpperCase() },
+      include: { redemptions: { where: { userId }, select: { id: true } } },
+    });
+  }
+
+  reserveCoupon(tx: PrismaTransaction, couponId: string, userId: string, orderId: string, maxUses: number | null) {
+    return tx.coupon.updateMany({
+      where: { id: couponId, ...(maxUses === null ? {} : { usedCount: { lt: maxUses } }) },
+      data: { usedCount: { increment: 1 } },
+    }).then(async (result) => {
+      if (result.count === 1) await tx.couponRedemption.create({ data: { couponId, userId, orderId } });
+      return result;
+    });
+  }
+
   transaction<T>(callback: (tx: PrismaTransaction) => Promise<T>) {
     return prisma.$transaction(callback);
   }

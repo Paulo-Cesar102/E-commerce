@@ -1,6 +1,6 @@
-import { useState, type FormEvent, type ReactNode } from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
-import { ChevronDown, Grid3X3, Menu, MessageCircle, Moon, Search, ShoppingBag, Sparkles, Store, Sun, UserRound, X } from "lucide-react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { Bell, ChevronDown, Grid3X3, Menu, MessageCircle, Moon, Search, ShoppingBag, Sparkles, Store, Sun, UserRound, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { imageUrl, useFallbackImage } from "../lib/images";
@@ -8,12 +8,17 @@ import { useAuthStore } from "../store/auth";
 import type { Cart, Category } from "../types";
 import { getInitials } from "../lib/format";
 import { useThemeStore } from "../store/theme";
+import { AdminSupportCenter } from "./AdminSupportCenter";
+import { AdminOperations } from "./AdminOperations";
+import { AdminCommandBar, type AdminTab } from "./AdminCommandBar";
 
 export function Layout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [adminTab, setAdminTab] = useState<AdminTab>("overview");
   const navigate = useNavigate();
-  const { user, accessToken, logout } = useAuthStore();
+  const location = useLocation();
+  const { user, accessToken, updateUser, logout } = useAuthStore();
   const { theme, toggleTheme } = useThemeStore();
   const { data: categories = [] } = useQuery({
     queryKey: ["categories"],
@@ -24,8 +29,18 @@ export function Layout({ children }: { children: ReactNode }) {
     queryFn: () => api<Cart>("/cart"),
     enabled: Boolean(accessToken),
   });
+  const { data: notifications = [] } = useQuery({
+    queryKey: ["notifications"],
+    queryFn: () => api<Array<{ readAt?: string | null }>>("/notifications"),
+    enabled: Boolean(accessToken),
+  });
 
   const cartCount = cart?.items.reduce((total, item) => total + item.quantity, 0) ?? 0;
+
+  useEffect(() => {
+    if (!accessToken) return;
+    void api<{ user: typeof user }>("/auth/me").then((response) => { if (response.user) updateUser(response.user); }).catch(() => undefined);
+  }, [accessToken, updateUser]);
 
   function submitSearch(event: FormEvent) {
     event.preventDefault();
@@ -76,6 +91,7 @@ export function Layout({ children }: { children: ReactNode }) {
                   <Link to="/pedidos">Meus pedidos</Link>
                   <Link to="/chat">Mensagens</Link>
                   {user.role !== "CUSTOMER" && <Link to="/dashboard">Painel da loja</Link>}
+                  {user.role === "ADMIN" && <Link to="/admin">Administração</Link>}
                   <button onClick={logout}>Sair</button>
                 </div>
               </div>
@@ -89,6 +105,7 @@ export function Layout({ children }: { children: ReactNode }) {
               <MessageCircle size={21} />
               <span>Mensagens</span>
             </Link>
+            {user && <Link className="header-action hide-small" to="/notificacoes" aria-label="Notificações"><Bell size={21} /><span>Notificações</span>{notifications.some((notification) => !notification.readAt) && <span className="cart-count">!</span>}</Link>}
             <Link className="cart-action" to="/carrinho" aria-label="Carrinho">
               <ShoppingBag size={22} />
               {cartCount > 0 && <span className="cart-count">{cartCount}</span>}
@@ -118,8 +135,8 @@ export function Layout({ children }: { children: ReactNode }) {
           <NavLink to="/buscar?sort=price_asc">Melhores ofertas</NavLink>
           <NavLink to="/sobre">Sobre a Vitrine</NavLink>
           {user?.role !== "CUSTOMER" && user && (
-            <NavLink to="/dashboard" className="seller-link">
-              <Store size={16} /> Área do vendedor
+            <NavLink to={user.role === "ADMIN" ? "/admin" : "/dashboard"} className="seller-link">
+              <Store size={16} /> {user.role === "ADMIN" ? "Administração" : "Área do vendedor"}
             </NavLink>
           )}
         </nav>
@@ -143,12 +160,13 @@ export function Layout({ children }: { children: ReactNode }) {
               <Link to="/chat" onClick={() => setMobileOpen(false)}>Mensagens</Link>
               <Link to="/sobre" onClick={() => setMobileOpen(false)}>Sobre a Vitrine</Link>
               {user?.role !== "CUSTOMER" && user && <Link to="/dashboard" onClick={() => setMobileOpen(false)}>Painel da loja</Link>}
+              {user?.role === "ADMIN" && <Link to="/admin" onClick={() => setMobileOpen(false)}>Administração</Link>}
             </nav>
           </aside>
         </div>
       )}
 
-      <main>{children}</main>
+      <main className={location.pathname === "/admin" && user?.role === "ADMIN" ? `admin-route admin-tab-${adminTab}` : undefined}>{location.pathname === "/admin" && user?.role === "ADMIN" && <AdminCommandBar active={adminTab} onChange={setAdminTab} />}{children}{location.pathname === "/admin" && user?.role === "ADMIN" && adminTab === "support" && <AdminSupportCenter />}{location.pathname === "/admin" && user?.role === "ADMIN" && (adminTab === "sellers" || adminTab === "audit") && <AdminOperations />}</main>
       <footer className="site-footer">
         <div>
           <Link to="/" className="brand brand-light"><span className="brand-mark">V</span><span>VITRINE</span></Link>

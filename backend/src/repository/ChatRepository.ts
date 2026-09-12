@@ -39,14 +39,22 @@ export class ChatRepository {
     return prisma.chat.create({ data });
   }
 
-  findAccessible(userId: string, chatId: string) {
+  findAccessible(userId: string, chatId: string, isAdmin = false) {
     return prisma.chat.findFirst({
       where: {
         id: chatId,
-        OR: [{ buyerId: userId }, { seller: { userId } }],
+        ...(isAdmin ? {} : { OR: [{ buyerId: userId }, { seller: { userId } }] }),
       },
       select: { id: true },
     });
+  }
+
+  findById(chatId: string) {
+    return prisma.chat.findUnique({ where: { id: chatId }, include: { buyer: { select: { id: true, name: true, email: true } }, seller: { select: { id: true, storeName: true } }, messages: { orderBy: { createdAt: "asc" }, take: 100 }, order: true } });
+  }
+
+  close(chatId: string) {
+    return prisma.chat.update({ where: { id: chatId }, data: { status: "CLOSED" } });
   }
 
   createMessage(data: { chatId: string; senderId: string; content: string }) {

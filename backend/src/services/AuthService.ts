@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import type { SignOptions } from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
 import { env } from "../config/env.js";
+import prisma from "../../prisma/prisma.js";
 import { AppError } from "../errors/AppError.js";
 import { AuthRepository } from "../repository/AuthRepository.js";
 
@@ -71,6 +72,11 @@ export class AuthService {
     };
 
     const user = await this.authRepository.createUser(data);
+
+    if (input.role === "SELLER") {
+      const admins = await prisma.user.findMany({ where: { role: "ADMIN" }, select: { id: true } });
+      if (admins.length) await prisma.notification.createMany({ data: admins.map((admin) => ({ userId: admin.id, type: "KYC_SUBMITTED", title: "Novo vendedor aguardando aprovação", body: `${user.name} criou uma conta de vendedor.`, data: { sellerId: user.id } })) });
+    }
 
     return {
       user,

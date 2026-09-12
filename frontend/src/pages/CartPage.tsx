@@ -12,6 +12,7 @@ export function CartPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [addressId, setAddressId] = useState("");
+  const [couponCode, setCouponCode] = useState("");
   const { data: cart, isLoading, error } = useQuery({ queryKey: ["cart"], queryFn: () => api<Cart>("/cart") });
   const { data: addresses = [] } = useQuery({ queryKey: ["addresses"], queryFn: () => api<{ id: string; recipient: string; street: string; number: string; city: string; state: string; postalCode: string; isDefault: boolean }[]>("/addresses") });
   const update = useMutation({
@@ -23,7 +24,7 @@ export function CartPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cart"] }),
   });
   const checkout = useMutation({
-    mutationFn: () => api<Order[]>("/orders/checkout", { method: "POST", body: JSON.stringify({ addressId: addressId || addresses.find((address) => address.isDefault)?.id, itemIds: selected.map((item) => item.id) }) }),
+    mutationFn: () => api<Order[]>("/orders/checkout", { method: "POST", body: JSON.stringify({ addressId: addressId || addresses.find((address) => address.isDefault)?.id, itemIds: selected.map((item) => item.id), ...(couponCode.trim() ? { couponCode: couponCode.trim() } : {}) }) }),
     onSuccess: (orders) => {
       queryClient.invalidateQueries({ queryKey: ["cart"] });
       const paymentUrl = orders.find((order) => order.mercadoPagoPreference)?.mercadoPagoPreference;
@@ -55,6 +56,7 @@ export function CartPage() {
           <div className="summary-line"><span>Produtos selecionados</span><strong>{selected.reduce((sum, item) => sum + item.quantity, 0)}</strong></div>
           <div className="summary-line"><span>Subtotal</span><strong>{formatPrice(subtotal)}</strong></div>
           <div className="shipping-box"><label htmlFor="address">Endereço de entrega</label>{addresses.length ? <select id="address" value={addressId} onChange={(event) => setAddressId(event.target.value)}><option value="">Usar endereço principal</option>{addresses.map((address) => <option key={address.id} value={address.id}>{address.street}, {address.number} — {address.city}/{address.state}</option>)}</select> : <Link to="/enderecos">Cadastre um endereço antes de pagar</Link>}</div>
+          <div className="shipping-box"><label htmlFor="coupon">Cupom de desconto</label><input id="coupon" value={couponCode} onChange={(event) => setCouponCode(event.target.value.toUpperCase())} placeholder="Digite seu cupom" maxLength={40} /></div>
           <div className="summary-total"><span>Total</span><strong>{formatPrice(subtotal)}</strong><small>em até 10x de {formatPrice(subtotal / 10)}</small></div>
           {checkout.error && <p className="form-error">{(checkout.error as Error).message}</p>}
           <button className="button button-primary full" disabled={!selected.length || !addresses.length || checkout.isPending} onClick={() => checkout.mutate()}><ShoppingBag size={18} /> {checkout.isPending ? "Processando..." : "Ir para pagamento"}</button>

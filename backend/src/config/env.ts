@@ -18,6 +18,8 @@ const envSchema = z.object({
   CORREIOS_QUOTE_URL: z.url().optional(),
   CORREIOS_API_TOKEN: z.string().optional(),
   CHECKOUT_HOLD_MINUTES: z.coerce.number().int().min(5).max(120).default(30),
+  PLATFORM_FEE_PERCENT: z.coerce.number().min(0).max(100).default(5),
+  ADMIN_WITHDRAWAL_EMAIL: z.email().default("pc00555c@gmail.com"),
   STORAGE_DRIVER: z.enum(["local", "s3"]).default("local"),
   S3_ENDPOINT: z.url().optional(),
   S3_REGION: z.string().default("auto"),

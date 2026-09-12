@@ -3,6 +3,7 @@ import { z } from "zod";
 export const checkoutSchema = z.object({
   addressId: z.string().uuid(),
   itemIds: z.array(z.string().uuid()).optional(),
+  couponCode: z.string().trim().min(1).max(40).optional(),
 });
 
 export const cancelOrderSchema = z.object({ reason: z.string().min(3).max(500) });

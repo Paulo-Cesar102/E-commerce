@@ -14,15 +14,19 @@ import { NotFoundPage } from "./pages/NotFoundPage";
 import { StorePage } from "./pages/StorePage";
 import { RecommendedPage } from "./pages/RecommendedPage";
 import { AddressesPage } from "./pages/AddressesPage";
+import { FavoritesPage } from "./pages/FavoritesPage";
+import { NotificationsPage } from "./pages/NotificationsPage";
+import { AdminPage } from "./pages/AdminPage";
 
 const ChatPage = lazy(() => import("./pages/ChatPage").then((module) => ({ default: module.ChatPage })));
 const DashboardPage = lazy(() => import("./pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
 
-function Protected({ children, seller = false }: { children: ReactNode; seller?: boolean }) {
+function Protected({ children, seller = false, admin = false }: { children: ReactNode; seller?: boolean; admin?: boolean }) {
   const user = useAuthStore((state) => state.user);
   const location = useLocation();
   if (!user) return <Navigate to="/entrar" state={{ from: location.pathname }} replace />;
   if (seller && user.role === "CUSTOMER") return <Navigate to="/" replace />;
+  if (admin && user.role !== "ADMIN") return <Navigate to="/" replace />;
   return children;
 }
 
@@ -40,6 +44,9 @@ export default function App() {
         <Route path="/criar-conta" element={<AuthPage mode="register" />} />
         <Route path="/pedidos" element={<Protected><OrdersPage /></Protected>} />
         <Route path="/enderecos" element={<Protected><AddressesPage /></Protected>} />
+        <Route path="/favoritos" element={<Protected><FavoritesPage /></Protected>} />
+        <Route path="/notificacoes" element={<Protected><NotificationsPage /></Protected>} />
+        <Route path="/admin" element={<Protected admin><AdminPage /></Protected>} />
         <Route path="/chat" element={<Protected><Suspense fallback={<Loader label="Abrindo mensagens" />}><ChatPage /></Suspense></Protected>} />
         <Route path="/dashboard" element={<Protected seller><Suspense fallback={<Loader label="Abrindo painel" />}><DashboardPage /></Suspense></Protected>} />
         <Route path="/sobre" element={<AboutPage />} />

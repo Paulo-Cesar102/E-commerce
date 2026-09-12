@@ -9,6 +9,7 @@ import { useAuthStore } from "../store/auth";
 import type { Product } from "../types";
 import { ErrorState, Loader } from "../components/UI";
 import { ProductCard } from "../components/ProductCard";
+import { ProductMarketingKit } from "../components/ProductMarketingKit";
 
 type ProductDetail = { product: Product; related: Product[] };
 
@@ -72,6 +73,7 @@ export function ProductPage() {
           </div>
           <button className="button button-dark full" disabled={product.stock === 0} onClick={() => requireAuth(() => add.mutate(undefined, { onSuccess: () => navigate("/carrinho") }))}>Comprar agora</button>
           <div className="purchase-benefits"><div><Truck /><span><strong>Entrega calculada no checkout</strong><small>Acompanhe pelo pedido</small></span></div><div><ShieldCheck /><span><strong>Pagamento protegido</strong><small>Ambiente seguro Mercado Pago</small></span></div></div>
+          <ProductMarketingKit product={product} image={imageUrl(images[activeImage]?.url)} />
           {product.seller && <div className="seller-summary"><Link to={`/loja/${product.seller.id}`}><span className="store-avatar">{product.seller.storeName[0]}</span><span><small>Vendido por</small><strong>{product.seller.storeName}</strong><em>Visitar loja</em></span></Link><button onClick={() => requireAuth(async () => { await api("/chats", { method: "POST", body: JSON.stringify({ sellerId: product.seller!.id }) }); navigate("/chat"); })}><MessageCircle size={17} /> Falar com a loja</button></div>}
         </div>
       </section>
