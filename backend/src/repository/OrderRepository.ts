@@ -44,6 +44,21 @@ export class OrderRepository {
     });
   }
 
+  async releaseCouponReservations(tx: PrismaTransaction, orderIds: string[]) {
+    const redemptions = await tx.couponRedemption.findMany({
+      where: { orderId: { in: orderIds } },
+      select: { couponId: true, id: true },
+    });
+    if (!redemptions.length) return;
+
+    await tx.couponRedemption.deleteMany({ where: { id: { in: redemptions.map((item) => item.id) } } });
+    const couponIds = [...new Set(redemptions.map((item) => item.couponId))];
+    await Promise.all(couponIds.map((couponId) => tx.coupon.update({
+      where: { id: couponId },
+      data: { usedCount: { decrement: 1 } },
+    })));
+  }
+
   transaction<T>(callback: (tx: PrismaTransaction) => Promise<T>) {
     return prisma.$transaction(callback);
   }
@@ -51,6 +66,7 @@ export class OrderRepository {
   createOrder(
     tx: PrismaTransaction,
     input: {
+      checkoutId: string;
       customerId: string;
       sellerId: string;
       subtotal: number;
@@ -67,6 +83,7 @@ export class OrderRepository {
   ) {
     return tx.order.create({
       data: {
+        checkoutId: input.checkoutId,
         customerId: input.customerId,
         sellerId: input.sellerId,
         subtotal: input.subtotal, shippingCost: input.shippingCost, discount: input.discount, platformFee: input.platformFee, total: input.total,
@@ -114,6 +131,31 @@ export class OrderRepository {
         },
       },
       include: { payment: true, items: true },
+    });
+  }
+
+  updateCheckoutPayment(checkoutId: string, input: { mercadoPagoPreference: string | null; providerRef: string }) {
+    return prisma.$transaction(async (tx) => {
+      const orders = await tx.order.findMany({ where: { checkoutId }, select: { id: true } });
+      await Promise.all(orders.map((order) => tx.order.update({
+        where: { id: order.id },
+        data: {
+          mercadoPagoPreference: input.mercadoPagoPreference,
+          payment: { update: { providerRef: input.providerRef } },
+        },
+      })));
+      return tx.order.findMany({
+        where: { checkoutId },
+        include: { payment: true, items: true },
+        orderBy: { createdAt: "asc" },
+      });
+    });
+  }
+
+  findCheckoutWithItemsAndPayment(tx: PrismaTransaction, checkoutId: string) {
+    return tx.order.findMany({
+      where: { checkoutId },
+      include: { items: true, payment: true },
     });
   }
 

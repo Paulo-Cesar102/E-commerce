@@ -32,7 +32,7 @@ export function CartPage() {
     },
   });
   const selected = cart?.items.filter((item) => item.selected) ?? [];
-  const subtotal = selected.reduce((sum, item) => sum + Number(item.product.price) * item.quantity, 0);
+  const subtotal = selected.reduce((sum, item) => sum + Number(item.variant?.price ?? item.product.price) * item.quantity, 0);
 
   if (isLoading) return <Loader label="Abrindo seu carrinho" />;
   if (error) return <div className="page-container"><ErrorState message={(error as Error).message} /></div>;
@@ -47,8 +47,8 @@ export function CartPage() {
           {cart.items.map((item) => <article className="cart-item" key={item.id}>
             <label className="check-control"><input type="checkbox" checked={item.selected} onChange={(event) => update.mutate({ id: item.id, body: { selected: event.target.checked } })} /><span><Check size={14} /></span></label>
             <Link to={`/produto/${item.productId}`} className="cart-item-image"><img src={imageUrl(item.product.images?.[0]?.url)} onError={useFallbackImage} alt={item.product.name} /></Link>
-            <div className="cart-item-info"><span className="product-category">{item.product.category?.name ?? "Vitrine"}</span><Link to={`/produto/${item.productId}`}><h3>{item.product.name}</h3></Link><small>{item.product.stock} unidades disponíveis</small><div className="cart-mobile-price">{formatPrice(item.product.price)}</div></div>
-            <div className="cart-item-actions"><strong>{formatPrice(Number(item.product.price) * item.quantity)}</strong><div className="quantity-control"><button disabled={item.quantity <= 1} onClick={() => update.mutate({ id: item.id, body: { quantity: item.quantity - 1 } })}><Minus size={15} /></button><span>{item.quantity}</span><button disabled={item.quantity >= item.product.stock} onClick={() => update.mutate({ id: item.id, body: { quantity: item.quantity + 1 } })}><Plus size={15} /></button></div><button className="remove-button" onClick={() => remove.mutate(item.id)}><Trash2 size={16} /> Remover</button></div>
+            <div className="cart-item-info"><span className="product-category">{item.product.category?.name ?? "Vitrine"}</span><Link to={`/produto/${item.productId}`}><h3>{item.product.name}</h3></Link><small>{item.product.stock} unidades disponíveis</small><div className="cart-mobile-price">{formatPrice(item.variant?.price ?? item.product.price)}</div></div>
+            <div className="cart-item-actions"><strong>{formatPrice(Number(item.variant?.price ?? item.product.price) * item.quantity)}</strong><div className="quantity-control"><button disabled={item.quantity <= 1} onClick={() => update.mutate({ id: item.id, body: { quantity: item.quantity - 1 } })}><Minus size={15} /></button><span>{item.quantity}</span><button disabled={item.quantity >= item.product.stock} onClick={() => update.mutate({ id: item.id, body: { quantity: item.quantity + 1 } })}><Plus size={15} /></button></div><button className="remove-button" onClick={() => remove.mutate(item.id)}><Trash2 size={16} /> Remover</button></div>
           </article>)}
         </section>
         <aside className="cart-summary">
@@ -57,7 +57,7 @@ export function CartPage() {
           <div className="summary-line"><span>Subtotal</span><strong>{formatPrice(subtotal)}</strong></div>
           <div className="shipping-box"><label htmlFor="address">Endereço de entrega</label>{addresses.length ? <select id="address" value={addressId} onChange={(event) => setAddressId(event.target.value)}><option value="">Usar endereço principal</option>{addresses.map((address) => <option key={address.id} value={address.id}>{address.street}, {address.number} — {address.city}/{address.state}</option>)}</select> : <Link to="/enderecos">Cadastre um endereço antes de pagar</Link>}</div>
           <div className="shipping-box"><label htmlFor="coupon">Cupom de desconto</label><input id="coupon" value={couponCode} onChange={(event) => setCouponCode(event.target.value.toUpperCase())} placeholder="Digite seu cupom" maxLength={40} /></div>
-          <div className="summary-total"><span>Total</span><strong>{formatPrice(subtotal)}</strong><small>em até 10x de {formatPrice(subtotal / 10)}</small></div>
+          <div className="summary-total"><span>Subtotal</span><strong>{formatPrice(subtotal)}</strong><small>Frete e desconto serão confirmados no checkout</small></div>
           {checkout.error && <p className="form-error">{(checkout.error as Error).message}</p>}
           <button className="button button-primary full" disabled={!selected.length || !addresses.length || checkout.isPending} onClick={() => checkout.mutate()}><ShoppingBag size={18} /> {checkout.isPending ? "Processando..." : "Ir para pagamento"}</button>
           <div className="secure-note"><ShieldCheck size={18} /><span>Pagamento seguro processado pelo Mercado Pago</span></div>

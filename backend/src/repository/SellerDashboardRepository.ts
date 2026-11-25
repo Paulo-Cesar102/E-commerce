@@ -43,4 +43,8 @@ export class SellerDashboardRepository {
       },
     });
   }
+
+  createWithdrawal(sellerId: string, amount: number) {
+    return prisma.withdrawal.create({ data: { amount, sellerId } });
+  }
 }

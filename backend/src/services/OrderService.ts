@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { AppError } from "../errors/AppError.js";
 import { OrderRepository } from "../repository/OrderRepository.js";
 import { CorreiosService } from "./CorreiosService.js";
@@ -36,6 +37,7 @@ export class OrderService {
     if (!env.MERCADO_PAGO_ACCESS_TOKEN) throw new AppError(503, "Pagamento indisponivel: configure o Mercado Pago");
     const address = await this.addresses.getOwned(userId, input.addressId);
     const cartItems = cart.items;
+    const checkoutId = crypto.randomUUID();
     const createdOrders = await this.orderRepository.transaction(async (tx) => {
       const orders = [];
       const coupon = input.couponCode ? await this.orderRepository.findCouponForCheckout(tx, input.couponCode, userId) : null;
@@ -67,6 +69,7 @@ export class OrderService {
         const total = subtotal + quote.price - discount;
         const deliveryEstimateDate = new Date(); deliveryEstimateDate.setDate(deliveryEstimateDate.getDate() + quote.deliveryDays);
         const createdOrder = await this.orderRepository.createOrder(tx, {
+          checkoutId,
           customerId: userId,
           sellerId,
           subtotal, shippingCost: quote.price, discount, platformFee,
@@ -102,23 +105,19 @@ export class OrderService {
     const orders = [];
 
     try {
-      for (const order of createdOrders) {
+      const checkoutTotal = createdOrders.reduce((sum, order) => sum + Number(order.total), 0);
       const preference = await this.mercadoPago.createPreference({
-        orderId: order.id,
-        items: order.items.map((item) => ({
-          title: item.product.name,
-          quantity: item.quantity,
-          unitPrice: Number(item.unitPrice),
-        })),
+        orderId: checkoutId,
+        items: [],
+        total: checkoutTotal,
       });
 
       orders.push(
-        await this.orderRepository.updateOrderPayment(order.id, {
+        ...(await this.orderRepository.updateCheckoutPayment(checkoutId, {
           mercadoPagoPreference: preference.initPoint ?? preference.sandboxInitPoint,
           providerRef: preference.providerRef,
-        }),
+        })),
       );
-    }
     } catch (error) {
       await this.orderRepository.transaction(async (tx) => {
         await this.stockService.release(
@@ -126,6 +125,7 @@ export class OrderService {
           cartItems.map((item) => ({ productId: item.productId, variantId: item.variantId, quantity: item.quantity })),
         );
         await this.orderRepository.cancelOrders(tx, createdOrders.map((order) => order.id));
+        await this.orderRepository.releaseCouponReservations(tx, createdOrders.map((order) => order.id));
       });
 
       throw error instanceof AppError ? error : new AppError(502, "Nao foi possivel iniciar o pagamento");
@@ -140,31 +140,43 @@ export class OrderService {
 
   async applyPaymentWebhook(input: { orderId: string; providerRef: string; status: "APPROVED" | "REJECTED" | "CANCELED" | "REFUNDED"; rawPayload?: unknown }) {
     return this.orderRepository.transaction(async (tx) => {
-      const order = await this.orderRepository.findOrderWithItemsAndPayment(tx, input.orderId);
+      const checkoutOrders = await this.orderRepository.findCheckoutWithItemsAndPayment(tx, input.orderId);
+      const orders = [...checkoutOrders];
 
-      if (!order) {
-        throw new AppError(404, "Pedido nao encontrado");
+      if (!orders.length) {
+        const legacyOrder = await this.orderRepository.findOrderWithItemsAndPayment(tx, input.orderId);
+        if (legacyOrder) orders.push(legacyOrder);
       }
-      if (!order.payment) throw new AppError(409, "Transacao de pagamento ausente");
-      const registered = await this.orderRepository.registerWebhookEvent(tx, order.payment.id, input.providerRef, (input.rawPayload ?? {}) as object);
-      if (!registered) return { received: true, duplicate: true };
+      if (!orders.length) throw new AppError(404, "Pedido ou checkout nao encontrado");
 
-      if (["REJECTED", "CANCELED", "REFUNDED"].includes(input.status) && order.status === "PENDING_PAYMENT") {
-        await this.stockService.release(
-          tx,
-          order.items.map((item) => ({ productId: item.productId, variantId: item.variantId, quantity: item.quantity })),
-        );
+      const registrations = [];
+      for (const order of orders) {
+        if (!order.payment) throw new AppError(409, "Transacao de pagamento ausente");
+        const eventId = `${input.providerRef}:${order.id}`;
+        const registered = await this.orderRepository.registerWebhookEvent(tx, order.payment.id, eventId, (input.rawPayload ?? {}) as object);
+        registrations.push(registered);
+
+        if (registered) {
+          if (["REJECTED", "CANCELED", "REFUNDED"].includes(input.status) && ["PENDING_PAYMENT", "PAID", "PREPARING", "SHIPPED"].includes(order.status)) {
+            await this.stockService.release(
+              tx,
+              order.items.map((item) => ({ productId: item.productId, variantId: item.variantId, quantity: item.quantity })),
+            );
+          }
+
+          await this.orderRepository.updatePaymentFromWebhook(tx, {
+            orderId: order.id,
+            orderStatus: input.status === "APPROVED" ? "PAID" : input.status === "REFUNDED" ? "REFUNDED" : "CANCELED",
+            paymentStatus: input.status,
+            ...(input.providerRef ? { providerRef: input.providerRef } : {}),
+            ...(input.rawPayload === undefined ? {} : { rawPayload: input.rawPayload }),
+          });
+          await this.orderRepository.markWebhookProcessed(tx, "MERCADO_PAGO", eventId);
+        }
       }
 
-      const updated = await this.orderRepository.updatePaymentFromWebhook(tx, {
-        orderId: order.id,
-        orderStatus: input.status === "APPROVED" ? "PAID" : input.status === "REFUNDED" ? "REFUNDED" : "CANCELED",
-        paymentStatus: input.status,
-        ...(input.providerRef ? { providerRef: input.providerRef } : {}),
-        ...(input.rawPayload === undefined ? {} : { rawPayload: input.rawPayload }),
-      });
-      await this.orderRepository.markWebhookProcessed(tx, "MERCADO_PAGO", input.providerRef);
-      return updated;
+      if (!registrations.some(Boolean)) return { received: true, duplicate: true };
+      return orders;
     });
   }
 
@@ -248,6 +260,7 @@ export class OrderService {
       if (!order) throw new AppError(404, "Pedido nao encontrado");
       if (order.status === "PENDING_PAYMENT") {
         await this.stockService.release(tx, order.items.map((item) => ({ productId: item.productId, variantId: item.variantId, quantity: item.quantity })));
+        await this.orderRepository.releaseCouponReservations(tx, [order.id]);
         return this.orderRepository.transitionOrder(tx, { orderId, fromStatus: "PENDING_PAYMENT", toStatus: "CANCELED", userId, type: "CUSTOMER_CANCEL", metadata: { reason } });
       }
       if (order.status !== "PAID" || !order.payment?.providerRef) throw new AppError(409, "Este pedido nao pode mais ser cancelado; solicite devolucao apos a entrega");
@@ -276,6 +289,7 @@ export class OrderService {
         const order = await this.orderRepository.findOrderWithItemsAndPayment(tx, id);
         if (!order || order.status !== "PENDING_PAYMENT") return;
         await this.stockService.release(tx, order.items.map((item) => ({ productId: item.productId, variantId: item.variantId, quantity: item.quantity })));
+        await this.orderRepository.releaseCouponReservations(tx, [id]);
         await this.orderRepository.transitionOrder(tx, { orderId: id, fromStatus: "PENDING_PAYMENT", toStatus: "CANCELED", type: "PAYMENT_EXPIRED" });
       });
     }

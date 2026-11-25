@@ -5,6 +5,9 @@ import { AppError } from "../errors/AppError.js";
 type PreferenceInput = {
   orderId: string;
   items: { title: string; quantity: number; unitPrice: number }[];
+  shippingCost?: number;
+  discount?: number;
+  total: number;
 };
 
 type MercadoPagoPaymentStatus = "APPROVED" | "REJECTED" | "CANCELED" | "REFUNDED";
@@ -66,11 +69,11 @@ export class MercadoPagoService {
       },
       body: JSON.stringify({
         external_reference: input.orderId,
-        items: input.items.map((item) => ({
-          title: item.title,
-          quantity: item.quantity,
-          unit_price: item.unitPrice,
-        })),
+        items: [{
+          title: "Pedido na Vitrine",
+          quantity: 1,
+          unit_price: Number(input.total.toFixed(2)),
+        }],
       }),
     });
 

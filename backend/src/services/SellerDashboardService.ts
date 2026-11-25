@@ -43,4 +43,27 @@ export class SellerDashboardService {
 
     return this.sellerDashboardRepository.updateSettings(seller.id, input);
   }
+
+  async requestWithdrawal(userId: string, amount: number) {
+    const seller = await this.sellerDashboardRepository.findSellerByUserId(userId);
+    if (!seller) throw new AppError(403, "Vendedor nao encontrado");
+    if (!Number.isFinite(amount) || amount <= 0) throw new AppError(400, "Valor de saque invalido");
+
+    const [financialTotals, withdrawals] = await this.sellerDashboardRepository.financialData(seller.id);
+    const pending = withdrawals
+      .filter((item) => ["REQUESTED", "APPROVED"].includes(item.status))
+      .reduce((sum, item) => sum + Number(item.amount), 0);
+    const available = Math.max(
+      0,
+      Number(financialTotals._sum.total ?? 0)
+      - Number(financialTotals._sum.platformFee ?? 0)
+      - pending,
+    );
+
+    if (amount > available) {
+      throw new AppError(409, `Saldo disponivel para saque: R$ ${available.toFixed(2)}`);
+    }
+
+    return this.sellerDashboardRepository.createWithdrawal(seller.id, amount);
+  }
 }

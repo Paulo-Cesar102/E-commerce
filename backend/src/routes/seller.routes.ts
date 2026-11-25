@@ -21,7 +21,5 @@ sellerRoutes.patch("/settings", validateBody(sellerSettingsSchema), asyncHandler
 }));
 
 sellerRoutes.post("/withdrawals", validateBody(z.object({ amount: z.number().positive().max(1_000_000) })), asyncHandler(async (req, res) => {
-  const seller = await prisma.sellerProfile.findUnique({ where: { userId: req.user!.sub }, select: { id: true } });
-  if (!seller) return res.status(404).json({ message: "Lojista nao encontrado" });
-  res.status(201).json(await prisma.withdrawal.create({ data: { amount: req.body.amount, sellerId: seller.id } }));
+  res.status(201).json(await dashboardService.requestWithdrawal(req.user!.sub, req.body.amount));
 }));

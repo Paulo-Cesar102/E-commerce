@@ -360,6 +360,7 @@ model CartItem {
 
 model Order {
   id                    String      @id @default(uuid())
+  checkoutId            String?
   subtotal              Decimal     @db.Decimal(12, 2)
   shippingCost          Decimal     @default(0) @db.Decimal(12, 2)
   discount              Decimal     @default(0) @db.Decimal(12, 2)
@@ -389,6 +390,7 @@ model Order {
 
   @@index([customerId, createdAt])
   @@index([sellerId, status])
+  @@index([checkoutId])
 }
 
 model Address {
