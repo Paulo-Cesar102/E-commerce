@@ -11,12 +11,15 @@ import prisma from "../../prisma/prisma.js";
 export const authRoutes = Router();
 const authService = new AuthService();
 const loginLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 8, standardHeaders: true, legacyHeaders: false, message: { message: "Muitas tentativas. Tente novamente em 15 minutos." } });
+const registerLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, standardHeaders: true, legacyHeaders: false, message: { message: "Muitas tentativas de cadastro. Tente novamente em 15 minutos." } });
+const refreshLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false, message: { message: "Muitas tentativas de renovação. Tente novamente em 15 minutos." } });
 const refreshCookie = "vitrine_refresh";
 const cookieOptions = { httpOnly: true, secure: env.COOKIE_SECURE, sameSite: "lax" as const, path: "/auth", maxAge: env.REFRESH_TOKEN_EXPIRES_DAYS * 86_400_000 };
 const readCookie = (header: string | undefined) => header?.split(";").map((part) => part.trim().split("=")).find(([key]) => key === refreshCookie)?.[1];
 
 authRoutes.post(
   "/register",
+  registerLimit,
   validateBody(registerSchema),
   asyncHandler(async (req, res) => {
     const session = await authService.register(req.body);
@@ -51,6 +54,7 @@ authRoutes.post(
 
 authRoutes.post(
   "/refresh",
+  refreshLimit,
   validateBody(refreshSchema),
   asyncHandler(async (req, res) => {
     const token = req.body.refreshToken ?? readCookie(req.header("cookie"));

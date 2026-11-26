@@ -20,6 +20,11 @@ sellerRoutes.patch("/settings", validateBody(sellerSettingsSchema), asyncHandler
   res.json(await dashboardService.updateSettings(req.user!.sub, req.body));
 }));
 
-sellerRoutes.post("/withdrawals", validateBody(z.object({ amount: z.number().positive().max(1_000_000) })), asyncHandler(async (req, res) => {
-  res.status(201).json(await dashboardService.requestWithdrawal(req.user!.sub, req.body.amount));
+sellerRoutes.post("/withdrawals", validateBody(z.object({
+  amount: z.number().positive().max(1_000_000),
+  pixKey: z.string().trim().min(3).max(120),
+})), asyncHandler(async (req, res) => {
+  const withdrawal = await dashboardService.requestWithdrawal(req.user!.sub, req.body.amount, req.body.pixKey);
+  req.app.locals.io?.to("admin:dashboard").emit("admin:refresh", { type: "SELLER_WITHDRAWAL_REQUESTED" });
+  res.status(201).json(withdrawal);
 }));

@@ -119,11 +119,16 @@ export class SellerPlanService {
   }
 
   async processMercadoPagoWebhook(input: {
-    body: { data?: { id?: string | number }; [key: string]: unknown };
+    body: { data?: { id?: string | number }; type?: string; [key: string]: unknown };
     query: Record<string, unknown>;
     signature: string | undefined;
     requestId: string | undefined;
   }) {
+    const type = input.body.type ?? input.query.type ?? input.query.topic;
+    if (type === "subscription_authorized_payment") {
+      return this.processAuthorizedPaymentWebhook(input);
+    }
+
     const dataId = input.query["data.id"] ?? input.query.id ?? input.body.data?.id;
     if (typeof dataId !== "string" && typeof dataId !== "number") {
       throw new AppError(400, "Assinatura nao informada no webhook");
@@ -183,6 +188,36 @@ export class SellerPlanService {
       });
     }
 
+    return { received: true };
+  }
+
+  private async processAuthorizedPaymentWebhook(input: {
+    body: { data?: { id?: string | number }; type?: string; [key: string]: unknown };
+    query: Record<string, unknown>;
+    signature: string | undefined;
+    requestId: string | undefined;
+  }) {
+    const dataId = input.query["data.id"] ?? input.query.id ?? input.body.data?.id;
+    if (typeof dataId !== "string" && typeof dataId !== "number") {
+      throw new AppError(400, "Cobranca recorrente nao informada no webhook");
+    }
+    const paymentId = String(dataId);
+    this.mercadoPago.verifyWebhookSignature({
+      dataId: paymentId,
+      signature: input.signature,
+      requestId: input.requestId,
+    });
+
+    const payment = await this.mercadoPago.getAuthorizedPayment(paymentId);
+    if (payment.currency !== "BRL") throw new AppError(409, "Moeda da cobranca Pro diferente de BRL");
+
+    const seller = await this.repository.findByMercadoPagoSubscriptionId(payment.subscriptionId);
+    if (!seller) return { received: true, ignored: true };
+
+    await this.repository.recordSubscriptionPayment({
+      ...payment,
+      sellerId: seller.id,
+    });
     return { received: true };
   }
 }

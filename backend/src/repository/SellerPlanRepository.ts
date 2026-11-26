@@ -41,6 +41,36 @@ export class SellerPlanRepository {
     });
   }
 
+  findByMercadoPagoSubscriptionId(subscriptionId: string) {
+    return prisma.sellerProfile.findUnique({
+      where: { mercadoPagoSubscriptionId: subscriptionId },
+      select: { id: true },
+    });
+  }
+
+  recordSubscriptionPayment(input: {
+    providerRef: string;
+    subscriptionId: string;
+    sellerId: string;
+    amount: number;
+    currency: string;
+    status: "PENDING" | "APPROVED" | "REJECTED" | "CANCELED" | "REFUNDED";
+    rawPayload: object;
+  }) {
+    return prisma.proSubscriptionPayment.upsert({
+      where: { providerRef: input.providerRef },
+      create: input,
+      update: {
+        subscriptionId: input.subscriptionId,
+        sellerId: input.sellerId,
+        amount: input.amount,
+        currency: input.currency,
+        status: input.status,
+        rawPayload: input.rawPayload,
+      },
+    });
+  }
+
   updateById(sellerId: string, data: Parameters<typeof prisma.sellerProfile.update>[0]["data"]) {
     return prisma.sellerProfile.update({ where: { id: sellerId }, data });
   }

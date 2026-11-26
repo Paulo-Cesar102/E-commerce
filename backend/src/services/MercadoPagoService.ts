@@ -27,6 +27,14 @@ type MercadoPagoSubscription = {
   auto_recurring?: { transaction_amount?: number; currency_id?: string };
 };
 
+type MercadoPagoAuthorizedPayment = {
+  id: string | number;
+  preapproval_id?: string;
+  currency_id?: string;
+  transaction_amount?: string | number;
+  payment?: { id?: string | number; status?: string };
+};
+
 export class MercadoPagoService {
   private parseSignature(signature: string) {
     return Object.fromEntries(
@@ -102,6 +110,9 @@ export class MercadoPagoService {
     if (!env.MERCADO_PAGO_ACCESS_TOKEN) {
       throw new AppError(503, "Assinatura indisponivel: configure o Mercado Pago");
     }
+    if (!env.API_PUBLIC_URL) {
+      throw new AppError(503, "Assinatura indisponivel: configure API_PUBLIC_URL para receber confirmacoes");
+    }
 
     const frontendUrl = (env.FRONTEND_URL ?? env.CORS_ORIGIN).split(",")[0]?.trim();
     if (!frontendUrl) throw new AppError(500, "FRONTEND_URL nao configurada");
@@ -116,6 +127,7 @@ export class MercadoPagoService {
         reason: "Vitrine Pro",
         external_reference: input.externalReference,
         payer_email: input.payerEmail,
+        notification_url: `${env.API_PUBLIC_URL.replace(/\/$/, "")}/seller/subscription/mercado-pago/webhook`,
         auto_recurring: {
           frequency: 1,
           frequency_type: "months",
@@ -152,6 +164,33 @@ export class MercadoPagoService {
     return (await response.json()) as MercadoPagoSubscription;
   }
 
+  async getAuthorizedPayment(paymentId: string) {
+    if (!env.MERCADO_PAGO_ACCESS_TOKEN) {
+      throw new AppError(503, "Assinatura indisponivel: configure o Mercado Pago");
+    }
+
+    const response = await fetch(`https://api.mercadopago.com/authorized_payments/${encodeURIComponent(paymentId)}`, {
+      headers: { Authorization: `Bearer ${env.MERCADO_PAGO_ACCESS_TOKEN}` },
+    });
+    if (!response.ok) throw new AppError(502, "Nao foi possivel consultar a cobranca recorrente no Mercado Pago");
+
+    const payment = (await response.json()) as MercadoPagoAuthorizedPayment;
+    const amount = Number(payment.transaction_amount);
+    if (!payment.id || !payment.preapproval_id || !Number.isFinite(amount) || amount <= 0 || !payment.currency_id) {
+      throw new AppError(502, "Mercado Pago retornou uma cobranca recorrente incompleta");
+    }
+
+    const status: MercadoPagoPaymentStatus | "PENDING" = this.toInternalStatus(payment.payment?.status) ?? "PENDING";
+    return {
+      providerRef: String(payment.id),
+      subscriptionId: payment.preapproval_id,
+      amount,
+      currency: payment.currency_id,
+      status,
+      rawPayload: payment,
+    };
+  }
+
   async cancelProSubscription(subscriptionId: string) {
     if (!env.MERCADO_PAGO_ACCESS_TOKEN) {
       throw new AppError(503, "Assinatura indisponivel: configure o Mercado Pago");
@@ -167,9 +206,15 @@ export class MercadoPagoService {
     if (!response.ok) throw new AppError(502, "Nao foi possivel cancelar a assinatura no Mercado Pago");
   }
 
-  async refundPayment(paymentId: string) {
+  async refundPayment(paymentId: string, idempotencyKey?: string) {
     if (!env.MERCADO_PAGO_ACCESS_TOKEN) throw new AppError(503, "Pagamento indisponivel: configure o Mercado Pago");
-    const response = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}/refunds`, { method: "POST", headers: { Authorization: `Bearer ${env.MERCADO_PAGO_ACCESS_TOKEN}` } });
+    const response = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}/refunds`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.MERCADO_PAGO_ACCESS_TOKEN}`,
+        ...(idempotencyKey ? { "X-Idempotency-Key": idempotencyKey } : {}),
+      },
+    });
     if (!response.ok) throw new AppError(502, "Nao foi possivel solicitar o estorno no Mercado Pago");
   }
 

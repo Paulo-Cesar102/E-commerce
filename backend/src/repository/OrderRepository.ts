@@ -262,6 +262,13 @@ export class OrderRepository {
     return tx.order.findFirst({ where: { id: orderId, customerId }, include: { items: true, payment: true } });
   }
 
+  hasDeniedReturnRequest(tx: PrismaTransaction, orderId: string) {
+    return tx.orderEvent.findFirst({
+      where: { orderId, type: "RETURN_DENIED" },
+      select: { id: true },
+    });
+  }
+
   findExpiredPendingPayments(before: Date) {
     return prisma.order.findMany({ where: { status: "PENDING_PAYMENT", createdAt: { lt: before } }, select: { id: true } });
   }

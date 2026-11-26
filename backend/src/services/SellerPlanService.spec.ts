@@ -110,4 +110,69 @@ describe("SellerPlanService", () => {
 
     expect(repository.updateById).not.toHaveBeenCalled();
   });
+
+  it("records approved recurring charges idempotently against the matching seller", async () => {
+    const repository = {
+      findByMercadoPagoSubscriptionId: jest.fn().mockResolvedValue({ id: "seller-1" }),
+      recordSubscriptionPayment: jest.fn().mockResolvedValue(undefined),
+    };
+    const mercadoPago = {
+      verifyWebhookSignature: jest.fn(),
+      getAuthorizedPayment: jest.fn().mockResolvedValue({
+        providerRef: "invoice-1",
+        subscriptionId: "mp-sub-1",
+        amount: 25,
+        currency: "BRL",
+        status: "APPROVED",
+        rawPayload: { id: 123 },
+      }),
+    };
+    const service = new SellerPlanService(repository as never, mercadoPago as never);
+
+    await expect(service.processMercadoPagoWebhook({
+      body: { type: "subscription_authorized_payment", data: { id: "invoice-1" } },
+      query: {},
+      signature: "ts=123,v1=valid",
+      requestId: "request-1",
+    })).resolves.toEqual({ received: true });
+
+    expect(mercadoPago.verifyWebhookSignature).toHaveBeenCalledWith({
+      dataId: "invoice-1",
+      signature: "ts=123,v1=valid",
+      requestId: "request-1",
+    });
+    expect(repository.recordSubscriptionPayment).toHaveBeenCalledWith(expect.objectContaining({
+      providerRef: "invoice-1",
+      subscriptionId: "mp-sub-1",
+      sellerId: "seller-1",
+      status: "APPROVED",
+    }));
+  });
+
+  it("does not record recurring payments in a non-BRL currency", async () => {
+    const repository = {
+      findByMercadoPagoSubscriptionId: jest.fn(),
+      recordSubscriptionPayment: jest.fn(),
+    };
+    const mercadoPago = {
+      verifyWebhookSignature: jest.fn(),
+      getAuthorizedPayment: jest.fn().mockResolvedValue({
+        providerRef: "invoice-1",
+        subscriptionId: "mp-sub-1",
+        amount: 25,
+        currency: "USD",
+        status: "APPROVED",
+        rawPayload: { id: 123 },
+      }),
+    };
+    const service = new SellerPlanService(repository as never, mercadoPago as never);
+
+    await expect(service.processMercadoPagoWebhook({
+      body: { type: "subscription_authorized_payment", data: { id: "invoice-1" } },
+      query: {},
+      signature: "ts=123,v1=valid",
+      requestId: "request-1",
+    })).rejects.toMatchObject({ statusCode: 409 });
+    expect(repository.recordSubscriptionPayment).not.toHaveBeenCalled();
+  });
 });

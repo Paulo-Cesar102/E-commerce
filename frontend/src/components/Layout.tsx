@@ -11,6 +11,8 @@ import { useThemeStore } from "../store/theme";
 import { AdminSupportCenter } from "./AdminSupportCenter";
 import { AdminOperations } from "./AdminOperations";
 import { AdminCommandBar, type AdminTab } from "./AdminCommandBar";
+import { AdminReturnsPanel } from "./AdminReturnsPanel";
+import { AdminCouponsPanel } from "./AdminCouponsPanel";
 
 export function Layout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -169,7 +171,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      <main className={location.pathname === "/admin" && user?.role === "ADMIN" ? `admin-route admin-tab-${adminTab}` : undefined}>{location.pathname === "/admin" && user?.role === "ADMIN" && <AdminCommandBar active={adminTab} onChange={setAdminTab} />}{children}{location.pathname === "/admin" && user?.role === "ADMIN" && adminTab === "support" && <AdminSupportCenter />}{location.pathname === "/admin" && user?.role === "ADMIN" && (adminTab === "sellers" || adminTab === "audit") && <AdminOperations />}</main>
+      <main className={location.pathname === "/admin" && user?.role === "ADMIN" ? `admin-route admin-tab-${adminTab}` : undefined}>{location.pathname === "/admin" && user?.role === "ADMIN" && <AdminCommandBar active={adminTab} onChange={setAdminTab} />}{children}{location.pathname === "/admin" && user?.role === "ADMIN" && adminTab === "support" && <AdminSupportCenter />}{location.pathname === "/admin" && user?.role === "ADMIN" && (adminTab === "sellers" || adminTab === "audit") && <AdminOperations />}{location.pathname === "/admin" && user?.role === "ADMIN" && adminTab === "returns" && <AdminReturnsPanel />}{location.pathname === "/admin" && user?.role === "ADMIN" && adminTab === "coupons" && <AdminCouponsPanel />}</main>
       <footer className="site-footer">
         <div>
           <Link to="/" className="brand brand-light"><span className="brand-mark">V</span><span>VITRINE</span></Link>

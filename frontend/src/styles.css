@@ -360,6 +360,15 @@ main { min-height: 65vh; }
 .admin-finance-list { margin-top: 14px; padding: 20px; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 7px; box-shadow: var(--shadow); }
 .admin-finance-list .section-heading { margin-bottom: 10px; }
 .admin-finance-list .section-heading span { color: var(--muted); font-size: 11px; }
+.admin-finance-metrics { max-width: 470px; }
+.admin-seller-withdrawals .section-heading { align-items: flex-start; }
+.admin-seller-withdrawals .section-heading p { margin: 4px 0 0; color: var(--muted); font-size: 11px; }
+.admin-seller-withdrawal-row { padding: 16px 0; display: flex; justify-content: space-between; align-items: center; gap: 18px; border-top: 1px solid var(--line); }
+.admin-seller-withdrawal-details { min-width: 220px; display: grid; gap: 5px; font-size: 12px; }
+.admin-seller-withdrawal-details small { color: var(--muted); font-size: 10px; }
+.admin-seller-withdrawal-details code { overflow-wrap: anywhere; font-size: 11px; }
+.admin-seller-withdrawal-actions { max-width: 620px; display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 7px; }
+.admin-seller-withdrawal-actions input { min-width: 170px; height: 38px; padding: 0 10px; color: var(--ink); background: var(--surface-soft); border: 1px solid var(--line); border-radius: 5px; }
 .withdrawal-form { display: flex; align-items: flex-end; gap: 9px; }
 .withdrawal-form label { display: grid; gap: 5px; color: #b9bbb4; font-size: 10px; font-weight: 800; }
 .withdrawal-form input { width: 118px; height: 42px; padding: 0 10px; color: var(--ink); background: var(--paper); border: 0; border-radius: 4px; outline: 0; }
@@ -388,18 +397,18 @@ main { min-height: 65vh; }
 .admin-route > .admin-command-bar button { min-height: 44px; justify-content: flex-start; color: #bcb6c9; }
 .admin-route > .admin-command-bar button.active { color: #fff; background: var(--coral); box-shadow: 0 7px 18px rgba(232,85,61,.2); }
 .admin-route > .admin-command-bar button:hover { color: #fff; background: #2a2437; }
-.admin-route > .admin-page, .admin-route > .admin-support-center, .admin-route > .admin-operations { grid-column: 2; width: auto; margin-left: 34px; margin-right: 34px; }
+.admin-route > .admin-page, .admin-route > .admin-support-center, .admin-route > .admin-operations, .admin-route > .admin-returns-panel, .admin-route > .admin-coupons-panel { grid-column: 2; width: auto; margin-left: 34px; margin-right: 34px; }
 .admin-route > .admin-page { padding-top: 34px; background: transparent; }
 .admin-route .admin-page h1, .admin-route .admin-page h2, .admin-route .admin-page h3 { color: #f5f3f0; }
 .admin-route .admin-page .page-heading p, .admin-route .admin-page .admin-kpis small, .admin-route .admin-page .admin-kpis em { color: #aaa3b1; }
-.admin-route .admin-kpis > div, .admin-route .admin-panel, .admin-route .admin-chart, .admin-route .admin-finance-list, .admin-route .admin-support-center, .admin-route .admin-operations, .admin-route .admin-operation-panel { color: #f5f3f0; background: #211e2b; border-color: #373143; box-shadow: none; }
+.admin-route .admin-kpis > div, .admin-route .admin-panel, .admin-route .admin-chart, .admin-route .admin-finance-list, .admin-route .admin-support-center, .admin-route .admin-operations, .admin-route .admin-operation-panel, .admin-route .admin-return-card, .admin-route .admin-coupon-form, .admin-route .admin-coupon-list, .admin-route .admin-coupon-card { color: #f5f3f0; background: #211e2b; border-color: #373143; box-shadow: none; }
 .admin-route .admin-finance-list, .admin-route .admin-operation-panel { background: #292532; }
 .admin-route .admin-kpis strong, .admin-route .operation-row strong, .admin-route .admin-support-center strong, .admin-route .admin-operations strong { color: #f5f3f0; }
 .admin-route .admin-support-center > header, .admin-route .admin-support-conversation > header, .admin-route .support-reply, .admin-route .admin-operations > header { background: #211e2b; border-color: #373143; }
 .admin-route .admin-support-layout, .admin-route .admin-support-layout aside button, .admin-route .admin-operation-row, .admin-route .operation-row { border-color: #373143; }
 .admin-route .admin-support-layout aside button { color: #f5f3f0; background: #211e2b; }
 .admin-route .admin-support-layout aside button.active { background: #30283b; }
-.admin-route .admin-support-layout aside small, .admin-route .admin-support-layout aside em, .admin-route .admin-support-center p, .admin-route .admin-operations p, .admin-route .operation-row small { color: #aaa3b1; }
+.admin-route .admin-support-layout aside small, .admin-route .admin-support-layout aside em, .admin-route .admin-support-center p, .admin-route .admin-operations p, .admin-route .operation-row small, .admin-route .admin-return-card small, .admin-route .admin-coupon-form p, .admin-route .admin-coupon-card-meta, .admin-route .admin-coupon-card-dates { color: #aaa3b1; }
 .admin-route .admin-support-conversation, .admin-route .support-messages { background: #181620; }
 .admin-route .support-message p, .admin-route .admin-filter-bar, .admin-route .seller-detail { background: #2b2636; border-color: #40384c; color: #f5f3f0; }
 .admin-route .admin-filter-bar input, .admin-route .admin-filter-bar select, .admin-route .operation-row select { color: #f5f3f0; background: #211e2b; border-color: #40384c; }
@@ -420,7 +429,7 @@ main { min-height: 65vh; }
 .admin-route .admin-command-bar + .admin-page .admin-live-status { color: #aaa3b1; }
 .admin-tab-finance .admin-page > .admin-kpis, .admin-tab-finance .admin-page > .admin-sections { display: none; }
 .admin-tab-overview .admin-page > .admin-finance { display: none; }
-.admin-tab-support .admin-page, .admin-tab-sellers .admin-page, .admin-tab-audit .admin-page { display: none; }
+.admin-tab-support .admin-page, .admin-tab-sellers .admin-page, .admin-tab-audit .admin-page, .admin-tab-returns .admin-page, .admin-tab-coupons .admin-page { display: none; }
 .admin-tab-sellers .admin-operation-panel:not(:nth-child(2)), .admin-tab-audit .admin-operation-panel:not(:nth-child(5)) { display: none; }
 .admin-tab-sellers .admin-operation-grid, .admin-tab-audit .admin-operation-grid { grid-template-columns: minmax(0, 1fr); }
 .admin-tab-sellers .admin-operation-panel, .admin-tab-audit .admin-operation-panel { grid-column: auto; }
@@ -432,14 +441,14 @@ main { min-height: 65vh; }
 .admin-route > .admin-command-bar button:hover { color: var(--coral-dark); background: #fff1ee; }
 .admin-route .admin-page h1, .admin-route .admin-page h2, .admin-route .admin-page h3 { color: var(--ink); }
 .admin-route .admin-page .page-heading p, .admin-route .admin-page .admin-kpis small, .admin-route .admin-page .admin-kpis em { color: var(--muted); }
-.admin-route .admin-kpis > div, .admin-route .admin-panel, .admin-route .admin-chart, .admin-route .admin-finance-list, .admin-route .admin-support-center, .admin-route .admin-operations, .admin-route .admin-operation-panel { color: var(--ink); background: var(--paper); border-color: var(--line); box-shadow: var(--shadow); }
+.admin-route .admin-kpis > div, .admin-route .admin-panel, .admin-route .admin-chart, .admin-route .admin-finance-list, .admin-route .admin-support-center, .admin-route .admin-operations, .admin-route .admin-operation-panel, .admin-route .admin-return-card, .admin-route .admin-coupon-form, .admin-route .admin-coupon-list, .admin-route .admin-coupon-card { color: var(--ink); background: var(--paper); border-color: var(--line); box-shadow: var(--shadow); }
 .admin-route .admin-finance-list, .admin-route .admin-operation-panel { background: var(--paper); }
 .admin-route .admin-kpis strong, .admin-route .operation-row strong, .admin-route .admin-support-center strong, .admin-route .admin-operations strong { color: var(--ink); }
 .admin-route .admin-support-center > header, .admin-route .admin-support-conversation > header, .admin-route .support-reply, .admin-route .admin-operations > header { background: var(--paper); border-color: var(--line); }
 .admin-route .admin-support-layout, .admin-route .admin-support-layout aside button, .admin-route .operation-row { border-color: var(--line); }
 .admin-route .admin-support-layout aside button { color: var(--ink); background: var(--paper); }
 .admin-route .admin-support-layout aside button.active { background: #fff3f0; }
-.admin-route .admin-support-layout aside small, .admin-route .admin-support-layout aside em, .admin-route .admin-support-center p, .admin-route .admin-operations p, .admin-route .operation-row small { color: var(--muted); }
+.admin-route .admin-support-layout aside small, .admin-route .admin-support-layout aside em, .admin-route .admin-support-center p, .admin-route .admin-operations p, .admin-route .operation-row small, .admin-route .admin-return-card small, .admin-route .admin-coupon-form p, .admin-route .admin-coupon-card-meta, .admin-route .admin-coupon-card-dates { color: var(--muted); }
 .admin-route .admin-support-conversation, .admin-route .support-messages { background: var(--canvas); }
 .admin-route .support-message p, .admin-route .admin-filter-bar, .admin-route .seller-detail { background: var(--surface-soft); border-color: var(--line); color: var(--ink); }
 .admin-route .admin-filter-bar input, .admin-route .admin-filter-bar select, .admin-route .operation-row select { color: var(--ink); background: var(--paper); border-color: var(--line); }
@@ -462,6 +471,61 @@ main { min-height: 65vh; }
 .admin-panel .section-heading h2 svg { color: var(--coral); }
 .admin-panel .dashboard-row { min-height: 54px; padding: 10px 0; border-top: 1px solid var(--line); }
 .admin-panel-link { width: 100%; margin-top: 12px; padding: 11px 0 0; display: flex; align-items: center; justify-content: center; gap: 5px; border: 0; border-top: 1px solid var(--line); color: var(--blue); background: transparent; font-size: 12px; font-weight: 800; }
+.admin-panel-count { display: inline-flex; align-items: center; gap: 7px; padding: 9px 12px; color: var(--coral-dark); background: #fff1ee; border: 1px solid #f4d0c9; border-radius: 6px; font-size: 11px; font-weight: 800; }
+.admin-returns-panel, .admin-coupons-panel { width: min(1160px, calc(100% - 48px)); margin: 0 auto 60px; padding: 26px 0 50px; }
+.admin-return-list { display: grid; gap: 14px; }
+.admin-return-card { padding: 20px; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); }
+.admin-return-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding-bottom: 15px; border-bottom: 1px solid var(--line); }
+.admin-return-card-head h2 { margin: 5px 0 0; font-size: 17px; }
+.admin-return-status { display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; color: #936500; background: #fff5d8; border: 1px solid #f1dfaa; border-radius: 20px; font-size: 10px; font-weight: 800; }
+.admin-return-details { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; padding: 16px 0; }
+.admin-return-details > div { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.admin-return-details small, .admin-return-reason > small { color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; }
+.admin-return-details strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.admin-return-details span { color: var(--muted); font-size: 10px; }
+.admin-return-reason { padding: 14px; background: var(--surface-soft); border-radius: 6px; }
+.admin-return-reason p { margin: 6px 0 0; font-size: 13px; line-height: 1.5; }
+.admin-return-items { padding: 12px 0 3px; }
+.admin-return-items > div { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; color: var(--muted); font-size: 11px; }
+.admin-return-items strong { color: var(--ink); }
+.admin-return-actions, .admin-return-resolution-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 12px; }
+.admin-return-resolution { margin-top: 15px; padding: 16px; background: var(--surface-soft); border: 1px solid var(--line); border-radius: 6px; }
+.admin-return-resolution > label { display: grid; gap: 7px; font-size: 11px; font-weight: 800; }
+.admin-return-resolution textarea { width: 100%; min-height: 74px; padding: 10px; resize: vertical; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 5px; font: inherit; }
+.admin-refund-confirm { display: flex; gap: 9px; margin-top: 12px; padding: 11px; color: var(--green); background: var(--paper); border: 1px solid var(--line); border-radius: 5px; }
+.admin-refund-confirm > svg { flex: none; }
+.admin-refund-confirm label { display: flex; align-items: flex-start; gap: 8px; color: var(--ink); font-size: 11px; line-height: 1.4; }
+.admin-refund-confirm input { margin-top: 2px; accent-color: var(--coral); }
+.admin-action-error { margin: 0 0 14px; }
+.admin-coupons-layout { display: grid; grid-template-columns: minmax(290px, .8fr) minmax(0, 1.2fr); align-items: start; gap: 16px; }
+.admin-coupon-form, .admin-coupon-list { min-width: 0; padding: 20px; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); }
+.admin-coupon-form > header, .admin-coupon-list > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.admin-coupon-form > header { justify-content: flex-start; }
+.admin-coupon-form-icon { width: 40px; height: 40px; display: grid; place-items: center; flex: none; color: var(--coral-dark); background: #fff1ee; border-radius: 7px; }
+.admin-coupon-form h2, .admin-coupon-list h2 { margin: 0; font-size: 16px; }
+.admin-coupon-form p { margin: 4px 0 0; color: var(--muted); font-size: 11px; }
+.admin-coupon-form > label, .admin-coupon-form-grid > label { min-width: 0; display: grid; gap: 6px; color: var(--ink); font-size: 10px; font-weight: 800; }
+.admin-coupon-form > label { margin-bottom: 13px; }
+.admin-coupon-form input:not([type="checkbox"]), .admin-coupon-form select { width: 100%; height: 38px; padding: 0 10px; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 5px; outline: 0; font: inherit; }
+.admin-coupon-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 13px; }
+.admin-coupon-form-grid > label { align-content: start; }
+.admin-coupon-form-grid > label svg { margin-bottom: -2px; color: var(--coral); }
+.admin-coupon-active-toggle { display: flex !important; align-items: center; gap: 8px !important; color: var(--muted) !important; font-size: 11px !important; }
+.admin-coupon-active-toggle input { accent-color: var(--coral); }
+.admin-coupon-form-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.admin-coupon-list > header { padding-bottom: 13px; border-bottom: 1px solid var(--line); }
+.admin-coupon-list > header > strong { color: var(--green); font-size: 11px; }
+.admin-coupon-items { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
+.admin-coupon-card { min-width: 0; padding: 14px; background: var(--surface-soft); border: 1px solid var(--line); border-radius: 6px; }
+.admin-coupon-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.admin-coupon-card-top > strong { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.admin-coupon-status { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-size: 9px; font-weight: 800; }
+.admin-coupon-status.active { color: var(--green); }
+.admin-coupon-card > p { margin: 12px 0; color: var(--coral-dark); font-size: 13px; font-weight: 850; }
+.admin-coupon-card-meta, .admin-coupon-card-dates { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 9px; }
+.admin-coupon-card-dates { margin-top: 8px; }
+.admin-coupon-card footer { display: flex; justify-content: flex-end; gap: 6px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.admin-coupon-card footer .button { min-height: 30px; padding: 0 8px; font-size: 10px; }
 .admin-empty { min-height: 150px; display: grid; place-items: center; align-content: center; gap: 8px; color: var(--muted); text-align: center; }
 .admin-empty p { margin: 0; font-size: 12px; }
 .coupon-active { color: var(--green); }
@@ -639,9 +703,10 @@ main { min-height: 65vh; }
 .seller-payout-card h2 { margin: 7px 0 4px; color: #fff; font-size: 34px; }
 .seller-payout-card p { margin: 0; color: rgba(255,255,255,.82); font-size: 11px; }
 .seller-payout-card .eyebrow { color: rgba(255,255,255,.84); }
-.seller-payout-card form { display: flex; align-items: flex-end; gap: 9px; }
+.seller-payout-card form { display: grid; grid-template-columns: minmax(140px, .7fr) minmax(220px, 1.4fr) auto; align-items: end; gap: 9px; }
 .seller-payout-card label { display: grid; gap: 5px; color: #fff; font-size: 10px; font-weight: 800; }
-.seller-payout-card input { width: 120px; height: 42px; padding: 0 10px; border: 0; border-radius: 4px; outline: 0; }
+.seller-payout-card input { width: 100%; height: 42px; padding: 0 10px; border: 0; border-radius: 4px; outline: 0; }
+.seller-payout-card .form-error { grid-column: 1 / -1; margin: 0; color: #fff; }
 .seller-withdrawals { margin-top: 18px; }
 .seller-withdrawal-row { min-height: 58px; padding: 10px 0; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--line); }
 .seller-withdrawal-row span:first-child { display: flex; flex-direction: column; gap: 3px; }
@@ -910,9 +975,12 @@ main { min-height: 65vh; }
   .dashboard-top { padding: 18px; }
   .dashboard-content { padding: 18px 18px 50px; }
   .seller-payout-card { align-items: stretch; flex-direction: column; }
-  .seller-payout-card form { align-items: stretch; flex-direction: column; }
+  .seller-payout-card form { grid-template-columns: 1fr; align-items: stretch; }
   .seller-payout-card input { width: 100%; }
   .seller-payout-card .button { width: 100%; }
+  .admin-seller-withdrawal-row { align-items: stretch; flex-direction: column; }
+  .admin-seller-withdrawal-actions { max-width: none; justify-content: stretch; }
+  .admin-seller-withdrawal-actions input, .admin-seller-withdrawal-actions .button { width: 100%; }
   .dashboard-grid { grid-template-columns: 1fr; }
   .local-store-filter { align-items: stretch; flex-wrap: wrap; }
   .local-store-filter > div { flex-basis: 100%; }
@@ -926,7 +994,7 @@ main { min-height: 65vh; }
   .admin-command-label { display: none; }
   .admin-route { display: block; }
   .admin-route > .admin-command-bar { width: calc(100% - 36px); min-height: auto; margin: 12px 18px 0; padding: 7px; position: sticky; top: 94px; flex-direction: row; align-items: center; border: 1px solid #373143; border-radius: 7px; }
-  .admin-route > .admin-page, .admin-route > .admin-support-center, .admin-route > .admin-operations { width: auto; margin-left: 18px; margin-right: 18px; }
+  .admin-route > .admin-page, .admin-route > .admin-support-center, .admin-route > .admin-operations, .admin-route > .admin-returns-panel, .admin-route > .admin-coupons-panel { width: auto; margin-left: 18px; margin-right: 18px; }
   .admin-route > .admin-page { padding-top: 22px; }
   .admin-route .page-heading { margin-bottom: 18px; }
   .admin-route .admin-finance-head { padding: 20px; }
@@ -945,6 +1013,15 @@ main { min-height: 65vh; }
   .admin-filter-bar button, .admin-filter-bar input, .admin-filter-bar select { width: 100%; min-width: 0; }
   .admin-filter-bar input[placeholder="Cliente ou e-mail"], .admin-filter-bar select { grid-column: 1 / -1; }
   .admin-operation-panel { padding: 14px; overflow: hidden; }
+  .admin-return-details { grid-template-columns: 1fr; gap: 10px; }
+  .admin-return-actions { align-items: stretch; flex-direction: column-reverse; }
+  .admin-return-actions .button, .admin-return-resolution-actions .button { width: 100%; }
+  .admin-return-resolution-actions { flex-direction: column-reverse; }
+  .admin-coupons-layout, .admin-coupon-items { grid-template-columns: 1fr; }
+  .admin-coupon-form, .admin-coupon-list { padding: 15px; }
+  .admin-coupon-form-grid { grid-template-columns: 1fr 1fr; }
+  .admin-coupon-form-actions { flex-direction: column-reverse; }
+  .admin-coupon-form-actions .button { width: 100%; }
   .admin-operation-panel:nth-child(2) .operation-row { align-items: flex-start; flex-wrap: wrap; }
   .admin-operation-panel:nth-child(2) .operation-main { width: 100%; flex-basis: 100%; }
   .admin-operation-panel:nth-child(2) .operation-row select { margin-left: auto; }

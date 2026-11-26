@@ -168,6 +168,7 @@ model SellerProfile {
   orders     Order[]
   chats      Chat[]
   withdrawals Withdrawal[]
+  proSubscriptionPayments ProSubscriptionPayment[]
 }
 
 model PasswordResetToken {
@@ -318,6 +319,7 @@ model Withdrawal {
   status      WithdrawalStatus @default(REQUESTED)
   note        String?
   providerRef String?
+  pixKey      String?
   requestedAt DateTime         @default(now())
   processedAt DateTime?
   sellerId    String?
@@ -325,6 +327,24 @@ model Withdrawal {
 
   @@index([status, requestedAt])
   @@index([sellerId, status, requestedAt])
+}
+
+model ProSubscriptionPayment {
+  id             String        @id @default(uuid())
+  providerRef    String        @unique
+  subscriptionId String
+  amount         Decimal       @db.Decimal(12, 2)
+  currency       String
+  status         PaymentStatus @default(PENDING)
+  rawPayload     Json?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  sellerId String?
+  seller   SellerProfile? @relation(fields: [sellerId], references: [id], onDelete: SetNull)
+
+  @@index([sellerId, status, createdAt])
+  @@index([subscriptionId, createdAt])
 }
 
 model ProductVariant {

@@ -4,26 +4,69 @@ import prisma from "../../prisma/prisma.js";
 import { adminRequired, authRequired } from "../middlewares/auth.js";
 import { validateBody } from "../middlewares/validate.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import type { Prisma } from "../../generated/prisma/index.js";
+import { Prisma } from "../../generated/prisma/index.js";
 import type { Server } from "socket.io";
 import type { Request } from "express";
 import { AppError } from "../errors/AppError.js";
 import { env } from "../config/env.js";
 import { QuickSaleRepository } from "../repository/QuickSaleRepository.js";
+import { AdminReturnService } from "../services/AdminReturnService.js";
 
 const notifyAdminDashboard = (req: Request, type: string) => {
   req.app.locals.io?.to("admin:dashboard").emit("admin:refresh", { type });
 };
 
-const couponSchema = z.object({ code: z.string().trim().min(2).max(40), type: z.enum(["PERCENT", "FIXED"]), value: z.number().positive(), minOrderValue: z.number().nonnegative().optional(), maxUses: z.number().int().positive().nullable().optional(), startsAt: z.coerce.date().optional(), endsAt: z.coerce.date().nullable().optional(), active: z.boolean().optional() });
+const couponFieldsSchema = z.object({ code: z.string().trim().min(2).max(40), type: z.enum(["PERCENT", "FIXED"]), value: z.number().positive(), minOrderValue: z.number().nonnegative().nullable().optional(), maxUses: z.number().int().positive().nullable().optional(), startsAt: z.coerce.date().optional(), endsAt: z.coerce.date().nullable().optional(), active: z.boolean().optional() });
+const validateCouponRules = (coupon: {
+  type?: "PERCENT" | "FIXED" | undefined;
+  value?: number | undefined;
+  startsAt?: Date | undefined;
+  endsAt?: Date | null | undefined;
+}, context: z.RefinementCtx) => {
+  if (coupon.type === "PERCENT" && coupon.value !== undefined && coupon.value > 100) {
+    context.addIssue({ code: "custom", path: ["value"], message: "O desconto percentual não pode exceder 100%" });
+  }
+  if (coupon.startsAt && coupon.endsAt && coupon.endsAt < coupon.startsAt) {
+    context.addIssue({ code: "custom", path: ["endsAt"], message: "O término precisa ser posterior ao início" });
+  }
+};
+const couponSchema = couponFieldsSchema.superRefine(validateCouponRules);
+const couponPatchSchema = couponFieldsSchema.partial().superRefine(validateCouponRules);
 const kycSchema = z.object({ approvalStatus: z.enum(["APPROVED", "REJECTED", "SUSPENDED", "PENDING"]), kycReviewNote: z.string().max(500).optional() });
 const withdrawalSchema = z.object({ amount: z.number().positive().max(1_000_000) });
+const withdrawalStatusSchema = z.object({
+  status: z.enum(["APPROVED", "REJECTED", "PAID"]),
+  note: z.string().trim().min(3).max(500).optional(),
+  providerRef: z.string().trim().min(3).max(120).optional(),
+}).superRefine((input, context) => {
+  if (input.status === "PAID" && !input.providerRef) {
+    context.addIssue({ code: "custom", path: ["providerRef"], message: "Informe a referencia do comprovante Pix" });
+  }
+  if (input.status === "REJECTED" && !input.note) {
+    context.addIssue({ code: "custom", path: ["note"], message: "Informe o motivo da rejeicao" });
+  }
+});
 const dateRangeSchema = z.object({ from: z.coerce.date().optional(), to: z.coerce.date().optional() });
 const quickSalePayoutSchema = z.object({ reference: z.string().trim().min(3).max(120) });
+const returnResolutionSchema = z.object({
+  decision: z.enum(["APPROVE", "DENY"]),
+  note: z.string().trim().min(3).max(500),
+});
 
 export const adminRoutes = Router();
 adminRoutes.use(authRequired, adminRequired);
 const quickSaleRepository = new QuickSaleRepository();
+const adminReturnService = new AdminReturnService();
+
+adminRoutes.get("/returns", asyncHandler(async (_req, res) => {
+  res.json(await adminReturnService.listPending());
+}));
+
+adminRoutes.patch("/returns/:orderId", validateBody(returnResolutionSchema), asyncHandler(async (req, res) => {
+  const result = await adminReturnService.resolve(String(req.params.orderId), req.user!.sub, req.body);
+  notifyAdminDashboard(req, "RETURN_RESOLVED");
+  res.json(result);
+}));
 
 adminRoutes.get("/quick-sale-payouts", asyncHandler(async (_req, res) => {
   const eligible = await quickSaleRepository.findEligiblePayouts(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
@@ -51,7 +94,7 @@ adminRoutes.patch("/quick-sale-payouts/:orderId", validateBody(quickSalePayoutSc
 
 adminRoutes.get("/overview", asyncHandler(async (_req, res) => {
   const paidOrderWhere: Prisma.OrderWhereInput = { payment: { status: "APPROVED" }, status: { in: ["PAID", "PREPARING", "SHIPPED", "DELIVERED"] } };
-  const [pendingKyc, products, orders, coupons, paidOrders, paidOrderCount, feeOrders, sellers, sellerSales, supportChats, withdrawals] = await Promise.all([
+  const [pendingKyc, products, orders, coupons, paidOrders, paidOrderCount, feeOrders, sellers, sellerSales, supportChats, withdrawals, subscriptionPayments, reservedWithdrawals, pendingWithdrawals] = await Promise.all([
     prisma.sellerProfile.findMany({ where: { approvalStatus: "PENDING" }, include: { user: { select: { id: true, name: true, email: true } } }, orderBy: { kycSubmittedAt: "asc" } }),
     prisma.product.findMany({ include: { seller: { select: { storeName: true } }, ownerUser: { select: { name: true } }, category: true }, orderBy: { createdAt: "desc" }, take: 100 }),
     prisma.order.findMany({ include: { customer: { select: { name: true, email: true } }, seller: { select: { storeName: true } }, directSeller: { select: { name: true } }, payment: true }, orderBy: { createdAt: "desc" }, take: 100 }),
@@ -63,12 +106,28 @@ adminRoutes.get("/overview", asyncHandler(async (_req, res) => {
     prisma.order.groupBy({ by: ["sellerId"], where: paidOrderWhere, _sum: { total: true, platformFee: true }, _count: { id: true } }),
     prisma.chat.findMany({ where: { status: "OPEN" }, include: { buyer: { select: { name: true, email: true } }, seller: { select: { storeName: true } }, messages: { orderBy: { createdAt: "desc" }, take: 1 } }, orderBy: { updatedAt: "desc" }, take: 30 }),
     prisma.withdrawal.findMany({ where: { sellerId: null }, orderBy: { requestedAt: "desc" }, take: 30 }),
+    prisma.proSubscriptionPayment.aggregate({ where: { status: "APPROVED", currency: "BRL" }, _sum: { amount: true } }),
+    prisma.withdrawal.aggregate({ where: { sellerId: null, status: { in: ["REQUESTED", "APPROVED", "PAID"] } }, _sum: { amount: true } }),
+    prisma.withdrawal.aggregate({ where: { sellerId: null, status: { in: ["REQUESTED", "APPROVED"] } }, _sum: { amount: true } }),
   ]);
   const chartOrders = await prisma.order.findMany({ where: paidOrderWhere, select: { total: true, platformFee: true, createdAt: true }, orderBy: { createdAt: "asc" } });
   const salesChart = chartOrders.reduce<Record<string, { sales: number; fees: number }>>((chart, order) => { const key = order.createdAt.toISOString().slice(0, 10); const current = chart[key] ?? { sales: 0, fees: 0 }; chart[key] = { sales: current.sales + Number(order.total), fees: current.fees + Number(order.platformFee) }; return chart; }, {});
-  const requested = withdrawals.filter((withdrawal) => ["REQUESTED", "APPROVED"].includes(withdrawal.status)).reduce((sum, withdrawal) => sum + Number(withdrawal.amount), 0);
+  const reserved = Number(reservedWithdrawals._sum.amount ?? 0);
+  const pending = Number(pendingWithdrawals._sum.amount ?? 0);
   const sellerSalesMap = Object.fromEntries(sellerSales.map((sale) => [sale.sellerId, { total: sale._sum.total ?? 0, platformFee: sale._sum.platformFee ?? 0, orders: sale._count.id }]));
-  res.json({ pendingKyc, products, orders, coupons, sellers: sellers.map((seller) => ({ ...seller, sales: sellerSalesMap[seller.id] ?? { total: 0, platformFee: 0, orders: 0 } })), supportChats, withdrawals, finance: { grossSales: paidOrders._sum?.total ?? 0, platformFees: paidOrders._sum?.platformFee ?? 0, availableFees: Math.max(0, Number(paidOrders._sum?.platformFee ?? 0) - requested), pendingFees: requested, paidOrders: paidOrderCount, recentFees: feeOrders, salesChart } });
+  const platformFees = Number(paidOrders._sum?.platformFee ?? 0);
+  const subscriptionRevenue = Number(subscriptionPayments._sum.amount ?? 0);
+  const platformRevenue = platformFees + subscriptionRevenue;
+  res.json({ pendingKyc, products, coupons, orders, sellers: sellers.map((seller) => ({ ...seller, sales: sellerSalesMap[seller.id] ?? { total: 0, platformFee: 0, orders: 0 } })), supportChats, withdrawals, finance: { grossSales: paidOrders._sum?.total ?? 0, platformFees, subscriptionRevenue, platformRevenue, availableFees: Math.max(0, platformRevenue - reserved), pendingFees: pending, paidOrders: paidOrderCount, recentFees: feeOrders, salesChart } });
+}));
+adminRoutes.get("/seller-withdrawals", asyncHandler(async (_req, res) => {
+  const withdrawals = await prisma.withdrawal.findMany({
+    where: { sellerId: { not: null }, status: { in: ["REQUESTED", "APPROVED"] } },
+    include: { seller: { select: { storeName: true, user: { select: { name: true, email: true } } } } },
+    orderBy: { requestedAt: "asc" },
+    take: 100,
+  });
+  res.json(withdrawals);
 }));
 adminRoutes.patch("/kyc/:sellerId", validateBody(kycSchema), asyncHandler(async (req, res) => {
   const result = await prisma.sellerProfile.update({ where: { id: String(req.params.sellerId) }, data: { approvalStatus: req.body.approvalStatus, kycReviewNote: req.body.kycReviewNote, kycReviewedAt: new Date() } });
@@ -76,22 +135,95 @@ adminRoutes.patch("/kyc/:sellerId", validateBody(kycSchema), asyncHandler(async 
   notifyAdminDashboard(req, "KYC_UPDATED");
   res.json(result);
 }));
-adminRoutes.post("/coupons", validateBody(couponSchema), asyncHandler(async (req, res) => {
-  res.status(201).json(await prisma.coupon.create({ data: { ...req.body, code: req.body.code.toUpperCase() } }));
+adminRoutes.get("/coupons", asyncHandler(async (_req, res) => {
+  res.json(await prisma.coupon.findMany({ orderBy: { createdAt: "desc" } }));
 }));
-adminRoutes.patch("/coupons/:id", validateBody(couponSchema.partial()), asyncHandler(async (req, res) => {
-  res.json(await prisma.coupon.update({ where: { id: String(req.params.id) }, data: { ...req.body, ...(req.body.code ? { code: req.body.code.toUpperCase() } : {}) } }));
+adminRoutes.post("/coupons", validateBody(couponSchema), asyncHandler(async (req, res) => {
+  const coupon = await prisma.$transaction(async (tx) => {
+    const created = await tx.coupon.create({ data: { ...req.body, code: req.body.code.toUpperCase() } });
+    await tx.auditLog.create({
+      data: {
+        userId: req.user!.sub,
+        action: "COUPON_CREATED",
+        entityType: "Coupon",
+        entityId: created.id,
+        metadata: { code: created.code },
+      },
+    });
+    return created;
+  });
+  notifyAdminDashboard(req, "COUPON_CREATED");
+  res.status(201).json(coupon);
+}));
+adminRoutes.patch("/coupons/:id", validateBody(couponPatchSchema), asyncHandler(async (req, res) => {
+  const coupon = await prisma.$transaction(async (tx) => {
+    const updated = await tx.coupon.update({
+      where: { id: String(req.params.id) },
+      data: { ...req.body, ...(req.body.code ? { code: req.body.code.toUpperCase() } : {}) },
+    });
+    await tx.auditLog.create({
+      data: {
+        userId: req.user!.sub,
+        action: "COUPON_UPDATED",
+        entityType: "Coupon",
+        entityId: updated.id,
+        metadata: { changes: req.body },
+      },
+    });
+    return updated;
+  });
+  notifyAdminDashboard(req, "COUPON_UPDATED");
+  res.json(coupon);
 }));
 adminRoutes.post("/withdrawals", validateBody(withdrawalSchema), asyncHandler(async (req, res) => {
   const admin = await prisma.user.findUnique({ where: { id: req.user!.sub }, select: { email: true } });
   if (!admin || admin.email.toLowerCase() !== env.ADMIN_WITHDRAWAL_EMAIL.toLowerCase()) throw new AppError(403, "Este administrador nao pode solicitar saques");
-  const result = await prisma.withdrawal.create({ data: { amount: req.body.amount } });
+  const result = await prisma.$transaction(async (tx) => {
+    const [paidOrders, subscriptionPayments, withdrawals] = await Promise.all([
+      tx.order.aggregate({ where: { payment: { status: "APPROVED" }, status: { in: ["PAID", "PREPARING", "SHIPPED", "DELIVERED"] } }, _sum: { platformFee: true } }),
+      tx.proSubscriptionPayment.aggregate({ where: { status: "APPROVED", currency: "BRL" }, _sum: { amount: true } }),
+      tx.withdrawal.aggregate({ where: { sellerId: null, status: { in: ["REQUESTED", "APPROVED", "PAID"] } }, _sum: { amount: true } }),
+    ]);
+    const reserved = Number(withdrawals._sum.amount ?? 0);
+    const available = Math.max(0, Number(paidOrders._sum.platformFee ?? 0) + Number(subscriptionPayments._sum.amount ?? 0) - reserved);
+    if (req.body.amount > available) {
+      throw new AppError(409, `Saldo disponivel para saque: R$ ${available.toFixed(2)}`);
+    }
+    return tx.withdrawal.create({ data: { amount: req.body.amount } });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   notifyAdminDashboard(req, "WITHDRAWAL_REQUESTED");
   res.status(201).json(result);
 }));
-adminRoutes.patch("/withdrawals/:id", validateBody(z.object({ status: z.enum(["APPROVED", "REJECTED", "PAID"]), note: z.string().max(500).optional() })), asyncHandler(async (req, res) => {
-  const result = await prisma.withdrawal.update({ where: { id: String(req.params.id) }, data: { status: req.body.status, note: req.body.note, ...(req.body.status === "PAID" || req.body.status === "REJECTED" ? { processedAt: new Date() } : {}) } });
-  await prisma.auditLog.create({ data: { userId: req.user!.sub, action: `WITHDRAWAL_${req.body.status}`, entityType: "Withdrawal", entityId: result.id, metadata: { amount: result.amount } } });
+adminRoutes.patch("/withdrawals/:id", validateBody(withdrawalStatusSchema), asyncHandler(async (req, res) => {
+  const result = await prisma.$transaction(async (tx) => {
+    const current = await tx.withdrawal.findUnique({ where: { id: String(req.params.id) } });
+    if (!current) throw new AppError(404, "Saque nao encontrado");
+    const canApproveOrReject = current.status === "REQUESTED" && ["APPROVED", "REJECTED"].includes(req.body.status);
+    const canPayOrReject = current.status === "APPROVED" && ["PAID", "REJECTED"].includes(req.body.status);
+    if (!canApproveOrReject && !canPayOrReject) throw new AppError(409, "Transicao de status de saque invalida");
+
+    const update = await tx.withdrawal.updateMany({
+      where: { id: current.id, status: current.status },
+      data: {
+        status: req.body.status,
+        note: req.body.note,
+        providerRef: req.body.providerRef,
+        ...(req.body.status === "PAID" || req.body.status === "REJECTED" ? { processedAt: new Date(), pixKey: null } : {}),
+      },
+    });
+    if (update.count !== 1) throw new AppError(409, "Saque atualizado por outro administrador");
+    const withdrawal = await tx.withdrawal.findUniqueOrThrow({ where: { id: current.id } });
+    await tx.auditLog.create({
+      data: {
+        userId: req.user!.sub,
+        action: `WITHDRAWAL_${req.body.status}`,
+        entityType: "Withdrawal",
+        entityId: withdrawal.id,
+        metadata: { amount: withdrawal.amount, providerRef: withdrawal.providerRef, note: withdrawal.note },
+      },
+    });
+    return withdrawal;
+  });
   notifyAdminDashboard(req, "WITHDRAWAL_UPDATED");
   res.json(result);
 }));

@@ -274,7 +274,7 @@ export class OrderService {
         throw new AppError(404, "Pedido nao encontrado");
       }
 
-      const allowed: Record<string, string[]> = { PAID: ["PREPARING", "CANCELED"], PREPARING: ["SHIPPED", "CANCELED"], SHIPPED: ["DELIVERED"], RETURN_REQUESTED: ["REFUNDED"] };
+      const allowed: Record<string, string[]> = { PAID: ["PREPARING", "CANCELED"], PREPARING: ["SHIPPED", "CANCELED"], SHIPPED: ["DELIVERED"] };
       if (!(allowed[order.status] ?? []).includes(status)) throw new AppError(409, `Transicao invalida de ${order.status} para ${status}`);
       if (status === "SHIPPED" && !correiosTrackingCode) throw new AppError(400, "Codigo de rastreio e obrigatorio ao enviar o pedido");
       if (status === "CANCELED" && order.status !== "PAID") throw new AppError(409, "Cancelamento pelo vendedor so e permitido antes do preparo");
@@ -315,6 +315,9 @@ export class OrderService {
       const order = await this.orderRepository.findCustomerOrderWithPayment(tx, userId, orderId);
       if (!order) throw new AppError(404, "Pedido nao encontrado");
       if (order.status !== "DELIVERED") throw new AppError(409, "Devolucao so pode ser solicitada para pedido entregue");
+      if (await this.orderRepository.hasDeniedReturnRequest(tx, order.id)) {
+        throw new AppError(409, "A solicitacao de devolucao deste pedido ja foi analisada");
+      }
       const limit = new Date(order.updatedAt); limit.setDate(limit.getDate() + 7);
       if (limit < new Date()) throw new AppError(409, "Prazo de 7 dias para devolucao expirou");
       return this.orderRepository.transitionOrder(tx, { orderId, fromStatus: "DELIVERED", toStatus: "RETURN_REQUESTED", userId, type: "RETURN_REQUESTED", metadata: { reason } });
