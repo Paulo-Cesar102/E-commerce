@@ -73,7 +73,7 @@ privacyRoutes.delete("/account", asyncHandler(async (req, res) => {
     }
     await tx.order.updateMany({ where: orderFilter, data: { shippingAddress: { redacted: true }, mercadoPagoPreference: null, correiosTrackingCode: null, quickSalePayoutReference: null } });
     await tx.orderEvent.updateMany({ where: { order: orderFilter }, data: { userId: null, metadata: Prisma.DbNull } });
-    await tx.paymentTransaction.updateMany({ where: { order: orderFilter }, data: { rawPayload: null } });
+    await tx.paymentTransaction.updateMany({ where: { order: orderFilter }, data: { rawPayload: Prisma.DbNull } });
     await tx.paymentAttempt.updateMany({ where: { paymentTransaction: { order: orderFilter } }, data: { payload: Prisma.DbNull } });
     await tx.paymentWebhookEvent.updateMany({ where: { paymentTransaction: { order: orderFilter } }, data: { payload: { redacted: true } } });
     await tx.product.updateMany({ where: { ownerUserId: userId, listingType: "QUICK_SALE" }, data: { status: "INACTIVE", stock: 0 } });
