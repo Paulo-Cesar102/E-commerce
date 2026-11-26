@@ -3,6 +3,7 @@ import { createQuickSaleSchema, quickSaleVerificationSchema } from "./quickSale.
 describe("createQuickSaleSchema shipping package", () => {
   const listing = {
     categoryId: "4e4b4967-68ae-4a2d-bdef-a7a98fe0ea04",
+    condition: "USED",
     name: "Console usado",
     description: "Console em bom estado, com controle e cabos.",
     price: 250,
@@ -22,6 +23,13 @@ describe("createQuickSaleSchema shipping package", () => {
       widthCm: 20,
       heightCm: 10,
     });
+  });
+
+  it("requires the seller to choose whether the item is new or used", () => {
+    expect(createQuickSaleSchema.parse({ ...listing, condition: "NEW" }).condition).toBe("NEW");
+    const { condition: _condition, ...withoutCondition } = listing;
+    expect(createQuickSaleSchema.safeParse(withoutCondition).success).toBe(false);
+    expect(createQuickSaleSchema.safeParse({ ...listing, condition: "REFURBISHED" }).success).toBe(false);
   });
 
   it("rejects missing and non-positive package measurements", () => {

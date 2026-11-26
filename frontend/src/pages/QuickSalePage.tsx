@@ -49,6 +49,7 @@ export function QuickSalePage() {
         method: "POST",
         body: JSON.stringify({
           categoryId: values.get("categoryId"),
+          condition: values.get("condition"),
           name: values.get("name"),
           description: values.get("description"),
           price: Number(String(values.get("price")).replace(",", ".")),
@@ -150,6 +151,7 @@ export function QuickSalePage() {
       <form id="quick-sale-form" onSubmit={submit}>
         <div className="quick-sale-form-grid">
           <label>Nome do item<input name="name" required minLength={2} maxLength={120} placeholder="Ex.: Videogame usado" /></label>
+          <label>Condição do item<select name="condition" required defaultValue=""><option value="" disabled>Escolha uma condição</option><option value="NEW">Novo</option><option value="USED">Usado</option></select></label>
           <label>Categoria<select name="categoryId" required defaultValue=""><option value="" disabled>Escolha uma categoria</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
           <label>Preço<input name="price" required type="number" min="0.01" step="0.01" placeholder="0,00" /></label>
           <label>CEP de origem<input name="originPostalCode" required inputMode="numeric" minLength={8} maxLength={9} placeholder="00000-000" onChange={(event) => { event.currentTarget.value = event.currentTarget.value.replace(/\D/g, "").slice(0, 8).replace(/^(\d{5})(\d)/, "$1-$2"); }} /></label>
@@ -158,7 +160,7 @@ export function QuickSalePage() {
           <label>Largura (cm)<input name="widthCm" required type="number" min="1" step="1" placeholder="Ex.: 20" /></label>
           <label>Altura (cm)<input name="heightCm" required type="number" min="1" step="1" placeholder="Ex.: 10" /></label>
         </div>
-        <p className="settings-hint">Informe o peso e as medidas do pacote já embalado; os Correios usam esses dados na cotação.</p>
+        <p className="settings-hint">A condição aparecerá no anúncio. Informe o peso e as medidas do pacote já embalado; os Correios usam esses dados na cotação.</p>
         <label>Descrição<textarea name="description" required minLength={10} maxLength={4000} rows={4} placeholder="Descreva o estado e os detalhes importantes do item." /></label>
         <label className="quick-sale-image-input"><ImagePlus size={20} /><span><strong>Fotos do item</strong><small>Escolha de 1 a 6 fotos · JPEG, PNG ou WEBP</small></span><input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => setImages(Array.from(event.target.files ?? []).slice(0, 6))} /></label>
         {images.length > 0 && <div className="quick-sale-image-list">{images.map((image) => <span key={`${image.name}-${image.lastModified}`}>{image.name}</span>)}</div>}
@@ -171,7 +173,7 @@ export function QuickSalePage() {
       <header><div><span className="eyebrow">Seus itens</span><h2>Meus anúncios</h2></div><Link to="/buscar?sort=new">Ver catálogo</Link></header>
       {data.listings.length ? <div className="quick-sale-list">{data.listings.map((listing) => <article key={listing.id}>
         <img src={imageUrl(listing.images[0]?.url)} onError={useFallbackImage} alt="" />
-        <div className="quick-sale-item"><strong>{listing.name}</strong><span>{listing.status === "ACTIVE" ? "Ativo" : "Inativo"} · {listing.stock > 0 ? "Disponível" : "Reservado/vendido"}</span><b>{formatPrice(listing.price)}</b></div>
+        <div className="quick-sale-item"><strong>{listing.name}</strong><span>{listing.condition === "USED" ? "Usado" : "Novo"} · {listing.status === "ACTIVE" ? "Ativo" : "Inativo"} · {listing.stock > 0 ? "Disponível" : "Reservado/vendido"}</span><b>{formatPrice(listing.price)}</b></div>
         <Link className="button button-ghost compact" to={`/produto/${listing.id}`}>Abrir</Link>
         {listing.stock > 0 && <button className="button button-dark compact" onClick={() => update.mutate({ id: listing.id, status: listing.status === "ACTIVE" ? "INACTIVE" : "ACTIVE" })} disabled={update.isPending || (listing.status === "INACTIVE" && (!isVerified || atLimit))}>{listing.status === "ACTIVE" ? "Desativar" : "Ativar"}</button>}
       </article>)}</div> : <EmptyState title="Nenhum anúncio ainda" text="Publique seu primeiro item para começar a vender." />}

@@ -90,7 +90,7 @@ export function ProductPage() {
           <div className="product-main-image"><img src={imageUrl(images[activeImage]?.url)} onError={useFallbackImage} alt={images[activeImage]?.alt || product.name} /></div>
         </div>
         <div className="product-info">
-          <span className="product-category">{product.category?.name}</span>
+          <div className="product-detail-labels"><span className="product-category">{product.category?.name}</span>{isQuickSale && <span className="product-detail-condition">{product.condition === "USED" ? "Usado" : "Novo"}</span>}</div>
           <h1>{product.name}</h1>
           <div className="detail-rating"><span><Star size={17} fill="currentColor" /> {rating ? rating.toFixed(1) : "Novo"}</span><a href="#avaliacoes">{product.reviews?.length ?? 0} avaliações</a><span>{product.stock > 0 ? "Em estoque" : "Indisponível"}</span></div>
           <p className="product-description">{product.description}</p>

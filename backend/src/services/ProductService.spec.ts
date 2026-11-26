@@ -52,4 +52,27 @@ describe("ProductService catalog filters", () => {
       12,
     );
   });
+
+  it("shows only available used quick-sale listings in the cross-category collection", async () => {
+    const categoryId = "4e4b4967-68ae-4a2d-bdef-a7a98fe0ea04";
+    await service.list({
+      condition: "USED",
+      categoryId,
+      sort: "rating",
+      page: 1,
+      limit: 12,
+    });
+
+    expect(list).toHaveBeenCalledWith(
+      expect.objectContaining({
+        condition: "USED",
+        listingType: "QUICK_SALE",
+        stock: { gt: 0 },
+        categoryId,
+      }),
+      expect.anything(),
+      1,
+      12,
+    );
+  });
 });

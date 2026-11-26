@@ -17,6 +17,7 @@ export const productQuerySchema = z.object({
   categoryId: z.string().uuid().optional(),
   sellerId: z.string().uuid().optional(),
   listingType: z.literal("QUICK_SALE").optional(),
+  condition: z.literal("USED").optional(),
   localOnly: z.enum(["true", "false"]).transform((value) => value === "true").optional(),
   city: z.string().trim().min(2).max(100).optional(),
   state: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/).optional(),

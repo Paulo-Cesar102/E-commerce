@@ -83,6 +83,11 @@ enum ProductListingType {
   QUICK_SALE
 }
 
+enum ProductCondition {
+  NEW
+  USED
+}
+
 enum QuickSalePayoutStatus {
   NOT_APPLICABLE
   PENDING
@@ -219,6 +224,7 @@ model Product {
   price       Decimal       @db.Decimal(12, 2)
   stock       Int           @default(0)
   listingType ProductListingType @default(STORE)
+  condition   ProductCondition @default(NEW)
   originPostalCode String?
   weightGrams Int?
   lengthCm Int?

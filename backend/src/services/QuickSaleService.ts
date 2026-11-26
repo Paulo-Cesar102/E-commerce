@@ -14,6 +14,7 @@ export function calculateQuickSaleCommission(subtotal: number) {
 
 type QuickSaleInput = {
   categoryId: string;
+  condition: "NEW" | "USED";
   name: string;
   description: string;
   price: number;

@@ -24,6 +24,7 @@ export const quickSaleVerificationSchema = z.object({
 
 export const createQuickSaleSchema = z.object({
   categoryId: z.string().uuid(),
+  condition: z.enum(["NEW", "USED"]),
   name: z.string().trim().min(2).max(120),
   description: z.string().trim().min(10).max(4000),
   price: z.coerce.number().positive(),

@@ -38,6 +38,7 @@ export function ProductCard({ product }: { product: Product }) {
     <article className="product-card">
       <Link to={`/produto/${product.id}`} className="product-image-wrap">
         <img src={imageUrl(product.images?.[0]?.url ?? productFallbackImage)} onError={useFallbackImage} alt={product.images?.[0]?.alt || product.name} />
+        {isQuickSale && <span className="product-condition-chip">{product.condition === "USED" ? "Usado" : "Novo"}</span>}
         {product.stock <= 5 && product.stock > 0 && <span className="stock-chip">Últimas unidades</span>}
       </Link>
       <button className="favorite-button" aria-label="Favoritar produto"><Heart size={18} /></button>

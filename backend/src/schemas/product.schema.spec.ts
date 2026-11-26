@@ -47,4 +47,9 @@ describe("productQuerySchema pagination", () => {
     });
     expect(productQuerySchema.safeParse({ listingType: "OTHER" }).success).toBe(false);
   });
+
+  it("accepts the cross-category used-items filter", () => {
+    expect(productQuerySchema.parse({ condition: "USED" }).condition).toBe("USED");
+    expect(productQuerySchema.safeParse({ condition: "DAMAGED" }).success).toBe(false);
+  });
 });

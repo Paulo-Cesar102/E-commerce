@@ -97,6 +97,7 @@ export class QuickSaleRepository {
 
   async createListing(userId: string, input: {
     categoryId: string;
+    condition: "NEW" | "USED";
     name: string;
     description: string;
     price: number;
@@ -119,6 +120,7 @@ export class QuickSaleRepository {
           listingType: "QUICK_SALE",
           ownerUserId: userId,
           categoryId: input.categoryId,
+          condition: input.condition,
           name: input.name,
           description: input.description,
           price: input.price,

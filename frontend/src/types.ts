@@ -32,6 +32,7 @@ export type Product = {
   ratingCount?: number;
   status?: "ACTIVE" | "INACTIVE";
   listingType?: "STORE" | "QUICK_SALE";
+  condition?: "NEW" | "USED";
   originPostalCode?: string | null;
   weightGrams?: number | null;
   lengthCm?: number | null;

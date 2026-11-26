@@ -41,6 +41,7 @@ describe("QuickSaleService", () => {
 
     await service.create("free-user", {
       categoryId: "category-1",
+      condition: "USED",
       name: "Console usado",
       description: "Console em bom estado, com controle e cabos.",
       price: 250,
@@ -54,7 +55,7 @@ describe("QuickSaleService", () => {
 
     expect(repository.createListing).toHaveBeenCalledWith(
       "free-user",
-      expect.objectContaining({ name: "Console usado" }),
+      expect.objectContaining({ name: "Console usado", condition: "USED" }),
       false,
     );
   });
@@ -88,6 +89,7 @@ describe("QuickSaleService", () => {
     const service = new QuickSaleService(repository as never, {} as never, fileStorage as never);
     const input = {
       categoryId: "category-1",
+      condition: "USED" as const,
       name: "Console usado",
       description: "Console em bom estado, com controle e cabos.",
       price: 250,

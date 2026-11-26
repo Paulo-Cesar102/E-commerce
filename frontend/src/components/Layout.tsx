@@ -135,6 +135,7 @@ export function Layout({ children }: { children: ReactNode }) {
           </div>
           <NavLink to="/recomendados"><Sparkles size={15} /> Recomendados</NavLink>
           <NavLink to="/buscar?listingType=QUICK_SALE" className={location.pathname === "/buscar" && new URLSearchParams(location.search).get("listingType") === "QUICK_SALE" ? "active" : ""}><Tag size={15} /> Venda rápida</NavLink>
+          <NavLink to="/buscar?condition=USED" className={location.pathname === "/buscar" && new URLSearchParams(location.search).get("condition") === "USED" ? "active" : ""}><Tag size={15} /> Itens usados</NavLink>
           <NavLink to="/buscar?localOnly=true" className={location.pathname === "/buscar" && new URLSearchParams(location.search).get("localOnly") === "true" ? "active" : ""}><MapPin size={15} /> Produtos locais</NavLink>
           <NavLink to="/buscar?sort=new">Novidades</NavLink>
           <NavLink to="/buscar?sort=price_asc">Melhores ofertas</NavLink>
@@ -163,6 +164,7 @@ export function Layout({ children }: { children: ReactNode }) {
               <Link to="/recomendados" onClick={() => setMobileOpen(false)}>Mais bem avaliados</Link>
               {categories.slice(0, 6).map((category) => <Link key={category.id} to={`/buscar?categoryId=${category.id}`} onClick={() => setMobileOpen(false)}>{category.name}</Link>)}
               <Link to="/buscar?listingType=QUICK_SALE" onClick={() => setMobileOpen(false)}>Venda rápida</Link>
+              <Link to="/buscar?condition=USED" onClick={() => setMobileOpen(false)}>Itens usados</Link>
               <Link to="/buscar?localOnly=true" onClick={() => setMobileOpen(false)}>Produtos locais</Link>
               <Link to="/pedidos" onClick={() => setMobileOpen(false)}>Meus pedidos</Link>
               <Link to="/anunciar" onClick={() => setMobileOpen(false)}>Anunciar item</Link>
