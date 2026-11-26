@@ -10,4 +10,12 @@ describe("productQuerySchema pagination", () => {
     expect(productQuerySchema.safeParse({ page: 1001 }).success).toBe(false);
     expect(productQuerySchema.safeParse({ limit: 31 }).success).toBe(false);
   });
+
+  it("accepts quick-sale and local-only catalog filters", () => {
+    expect(productQuerySchema.parse({ listingType: "QUICK_SALE", localOnly: "true" })).toMatchObject({
+      listingType: "QUICK_SALE",
+      localOnly: true,
+    });
+    expect(productQuerySchema.safeParse({ listingType: "OTHER" }).success).toBe(false);
+  });
 });

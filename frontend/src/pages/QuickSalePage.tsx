@@ -98,7 +98,7 @@ export function QuickSalePage() {
           <label>CEP de origem<input name="originPostalCode" required inputMode="numeric" minLength={8} maxLength={9} placeholder="00000-000" onChange={(event) => { event.currentTarget.value = event.currentTarget.value.replace(/\D/g, "").slice(0, 8).replace(/^(\d{5})(\d)/, "$1-$2"); }} /></label>
         </div>
         <label>Descrição<textarea name="description" required minLength={10} maxLength={4000} rows={4} placeholder="Descreva o estado e os detalhes importantes do item." /></label>
-        <label className="quick-sale-image-input"><ImagePlus size={18} /> Fotos do item (1 a 6)<input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => setImages(Array.from(event.target.files ?? []).slice(0, 6))} /></label>
+        <label className="quick-sale-image-input"><ImagePlus size={20} /><span><strong>Fotos do item</strong><small>Escolha de 1 a 6 fotos · JPEG, PNG ou WEBP</small></span><input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => setImages(Array.from(event.target.files ?? []).slice(0, 6))} /></label>
         {images.length > 0 && <div className="quick-sale-image-list">{images.map((image) => <span key={`${image.name}-${image.lastModified}`}>{image.name}</span>)}</div>}
         {(create.error || update.error || updateOrder.error) && <p className="form-error">{((create.error ?? update.error ?? updateOrder.error) as Error).message}</p>}
         <button className="button button-primary" disabled={create.isPending || atLimit || !images.length}>{create.isPending ? "Publicando..." : atLimit ? "Limite de anúncio atingido" : "Publicar anúncio"}</button>

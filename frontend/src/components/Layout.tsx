@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Bell, ChevronDown, Grid3X3, Menu, MessageCircle, Moon, Search, ShoppingBag, Sparkles, Store, Sun, UserRound, X } from "lucide-react";
+import { Bell, ChevronDown, Grid3X3, MapPin, Menu, MessageCircle, Moon, Search, ShoppingBag, Sparkles, Store, Sun, Tag, UserRound, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { imageUrl, useFallbackImage } from "../lib/images";
@@ -134,6 +134,8 @@ export function Layout({ children }: { children: ReactNode }) {
             </div>
           </div>
           <NavLink to="/recomendados"><Sparkles size={15} /> Recomendados</NavLink>
+          <NavLink to="/buscar?listingType=QUICK_SALE" className={location.pathname === "/buscar" && new URLSearchParams(location.search).get("listingType") === "QUICK_SALE" ? "active" : ""}><Tag size={15} /> Venda rápida</NavLink>
+          <NavLink to="/buscar?localOnly=true" className={location.pathname === "/buscar" && new URLSearchParams(location.search).get("localOnly") === "true" ? "active" : ""}><MapPin size={15} /> Produtos locais</NavLink>
           <NavLink to="/buscar?sort=new">Novidades</NavLink>
           <NavLink to="/buscar?sort=price_asc">Melhores ofertas</NavLink>
           <NavLink to="/anunciar">Anunciar item</NavLink>
@@ -160,8 +162,10 @@ export function Layout({ children }: { children: ReactNode }) {
               <Link to="/buscar" onClick={() => setMobileOpen(false)}>Explorar produtos</Link>
               <Link to="/recomendados" onClick={() => setMobileOpen(false)}>Mais bem avaliados</Link>
               {categories.slice(0, 6).map((category) => <Link key={category.id} to={`/buscar?categoryId=${category.id}`} onClick={() => setMobileOpen(false)}>{category.name}</Link>)}
+              <Link to="/buscar?listingType=QUICK_SALE" onClick={() => setMobileOpen(false)}>Venda rápida</Link>
+              <Link to="/buscar?localOnly=true" onClick={() => setMobileOpen(false)}>Produtos locais</Link>
               <Link to="/pedidos" onClick={() => setMobileOpen(false)}>Meus pedidos</Link>
-              <Link to="/anunciar" onClick={() => setMobileOpen(false)}>Venda rápida</Link>
+              <Link to="/anunciar" onClick={() => setMobileOpen(false)}>Anunciar item</Link>
               <Link to="/chat" onClick={() => setMobileOpen(false)}>Mensagens</Link>
               <Link to="/sobre" onClick={() => setMobileOpen(false)}>Sobre a Vitrine</Link>
               {user?.role !== "CUSTOMER" && user && <Link to="/dashboard" onClick={() => setMobileOpen(false)}>Painel da loja</Link>}

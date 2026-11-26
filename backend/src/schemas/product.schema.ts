@@ -10,6 +10,8 @@ export const productQuerySchema = z.object({
   q: z.string().optional(),
   categoryId: z.string().uuid().optional(),
   sellerId: z.string().uuid().optional(),
+  listingType: z.literal("QUICK_SALE").optional(),
+  localOnly: z.enum(["true", "false"]).transform((value) => value === "true").optional(),
   city: z.string().trim().min(2).max(100).optional(),
   state: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/).optional(),
   sort: z.enum(["rating", "new", "price_asc", "price_desc"]).default("rating"),

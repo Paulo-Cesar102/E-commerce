@@ -7,6 +7,8 @@ type ProductQuery = {
   q?: string;
   categoryId?: string;
   sellerId?: string;
+  listingType?: "QUICK_SALE";
+  localOnly?: boolean;
   city?: string;
   state?: string;
   sort: "rating" | "new" | "price_asc" | "price_desc";
@@ -32,7 +34,7 @@ export class ProductService {
     private readonly sellerPlans = new SellerPlanService(),
   ) {}
 
-  async list({ q, categoryId, sellerId, city, state, sort, page, limit }: ProductQuery) {
+  async list({ q, categoryId, sellerId, listingType, localOnly, city, state, sort, page, limit }: ProductQuery) {
     const now = new Date();
     const proSeller = {
       seller: {
@@ -42,26 +44,42 @@ export class ProductService {
         },
       },
     };
-    const localFreeSeller = city && state
+    const localLocation = {
+      ...(city ? { city: { equals: city, mode: "insensitive" as const } } : {}),
+      ...(state ? { state: { equals: state, mode: "insensitive" as const } } : {}),
+    };
+    const localFreeSeller = city || state
       ? {
           seller: {
             is: {
               plan: "FREE" as const,
-              city: { equals: city, mode: "insensitive" as const },
-              state: { equals: state, mode: "insensitive" as const },
+              ...localLocation,
             },
           },
         }
       : null;
     const quickSaleListing = { listingType: "QUICK_SALE" as const, stock: { gt: 0 } };
+    const localStoreListing = {
+      listingType: "STORE" as const,
+      seller: {
+        is: {
+          plan: "FREE" as const,
+          ...localLocation,
+        },
+      },
+    };
     const where = {
       status: "ACTIVE" as const,
       ...(categoryId ? { categoryId } : {}),
       ...(sellerId ? { sellerId, listingType: "STORE" as const } : {}),
       ...(q ? { name: { contains: q, mode: "insensitive" as const } } : {}),
-      ...(sellerId
-        ? {}
-        : { OR: localFreeSeller ? [proSeller, localFreeSeller, quickSaleListing] : [proSeller, quickSaleListing] }),
+      ...(localOnly
+        ? localStoreListing
+        : sellerId
+          ? {}
+          : listingType === "QUICK_SALE"
+            ? quickSaleListing
+            : { OR: localFreeSeller ? [proSeller, localFreeSeller, quickSaleListing] : [proSeller, quickSaleListing] }),
     };
     const orderBy =
       sort === "new"
