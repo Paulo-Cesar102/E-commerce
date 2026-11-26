@@ -14,10 +14,16 @@ privacyRoutes.get("/consents", asyncHandler(async (req, res) => {
 }));
 
 privacyRoutes.post("/consents", validateBody(consentSchema), asyncHandler(async (req, res) => {
-  const consent = await prisma.userConsent.upsert({
-    where: { userId_type_version: { userId: req.user!.sub, type: req.body.type, version: req.body.version } },
-    update: { revokedAt: req.body.granted ? null : new Date() },
-    create: { userId: req.user!.sub, type: req.body.type, version: req.body.version, ...(req.body.granted ? {} : { revokedAt: new Date() }) },
+  const consent = await prisma.$transaction(async (tx) => {
+    const updated = await tx.userConsent.upsert({
+      where: { userId_type_version: { userId: req.user!.sub, type: req.body.type, version: req.body.version } },
+      update: { revokedAt: req.body.granted ? null : new Date() },
+      create: { userId: req.user!.sub, type: req.body.type, version: req.body.version, ...(req.body.granted ? {} : { revokedAt: new Date() }) },
+    });
+    if (req.body.type === "QUICK_SALE_CPF_REVIEW" && !req.body.granted) {
+      await tx.quickSaleVerification.deleteMany({ where: { userId: req.user!.sub } });
+    }
+    return updated;
   });
   await prisma.auditLog.create({ data: { userId: req.user!.sub, action: req.body.granted ? "CONSENT_GRANTED" : "CONSENT_REVOKED", entityType: "UserConsent", entityId: consent.id } });
   res.json(consent);
@@ -25,7 +31,7 @@ privacyRoutes.post("/consents", validateBody(consentSchema), asyncHandler(async 
 
 privacyRoutes.get("/export", asyncHandler(async (req, res) => {
   const userId = req.user!.sub;
-  const data = await prisma.user.findUnique({ where: { id: userId }, include: { addresses: true, orders: { include: { items: true, payment: true, shipments: { orderBy: { packageNumber: "asc" } } } }, wishlistItems: { include: { product: true } }, consents: true } });
+  const data = await prisma.user.findUnique({ where: { id: userId }, include: { addresses: true, orders: { include: { items: true, payment: true, shipments: { orderBy: { packageNumber: "asc" } } } }, wishlistItems: { include: { product: true } }, consents: true, quickSaleVerification: { select: { legalName: true, cpfLastFour: true, status: true, submittedAt: true, reviewedAt: true, reviewNote: true } } } });
   res.json(data);
 }));
 
@@ -35,6 +41,7 @@ privacyRoutes.delete("/account", asyncHandler(async (req, res) => {
     await tx.cartItem.deleteMany({ where: { cart: { userId } } });
     await tx.cart.deleteMany({ where: { userId } });
     await tx.wishlistItem.deleteMany({ where: { userId } });
+    await tx.quickSaleVerification.deleteMany({ where: { userId } });
     await tx.userConsent.deleteMany({ where: { userId } });
     await tx.user.update({ where: { id: userId }, data: { name: "Conta excluida", email: `deleted-${userId}@invalid.local`, password: "ACCOUNT_DELETED" } });
     await tx.auditLog.create({ data: { action: "ACCOUNT_DELETED", entityType: "User", entityId: userId } });

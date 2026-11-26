@@ -58,6 +58,12 @@ enum SellerApprovalStatus {
   SUSPENDED
 }
 
+enum QuickSaleVerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum SellerPlan {
   FREE
   PRO
@@ -123,6 +129,7 @@ model User {
   emailVerificationTokens EmailVerificationToken[]
   quickSaleProducts Product[] @relation("QuickSaleProducts")
   directSaleOrders Order[] @relation("DirectSaleOrders")
+  quickSaleVerification QuickSaleVerification?
 }
 
 model RefreshToken {
@@ -304,6 +311,22 @@ model UserConsent {
   user User @relation(fields:[userId], references:[id], onDelete: Cascade)
   @@unique([userId, type, version])
 }
+
+model QuickSaleVerification {
+  id String @id @default(uuid())
+  legalName String
+  cpfHash String @unique
+  cpfLastFour String
+  status QuickSaleVerificationStatus @default(PENDING)
+  submittedAt DateTime @default(now())
+  reviewedAt DateTime?
+  reviewNote String?
+  userId String @unique
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, submittedAt])
+}
+
 model AuditLog {
   id String @id @default(uuid())
   action String

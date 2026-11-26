@@ -9,7 +9,10 @@ export class SellerDashboardService {
   ) {}
 
   async summary(userId: string) {
-    const seller = await this.sellerDashboardRepository.findSellerByUserId(userId);
+    const [seller, verification] = await Promise.all([
+      this.sellerDashboardRepository.findSellerByUserId(userId),
+      this.sellerDashboardRepository.findQuickSaleVerificationStatus(userId),
+    ]);
     if (!seller) {
       throw new AppError(403, "Vendedor nao encontrado");
     }
@@ -26,7 +29,7 @@ export class SellerDashboardService {
     }, {});
 
     return {
-      seller,
+      seller: { ...seller, quickSaleVerificationStatus: verification?.status ?? null },
       plan: await this.sellerPlans.getPlan(userId),
       totalSales,
       revenue,

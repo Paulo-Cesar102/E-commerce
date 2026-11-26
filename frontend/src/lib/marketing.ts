@@ -4,6 +4,7 @@ type StoryInput = {
   imageUrl: string;
   storeName?: string;
   productId: string;
+  isQuickSale: boolean;
 };
 
 function loadImage(source: string) {
@@ -67,7 +68,7 @@ export async function downloadProductStory(input: StoryInput) {
   context.fillStyle = "#ffffff";
   context.font = "700 25px sans-serif";
   context.textAlign = "center";
-  context.fillText("DESTAQUE DA LOJA", 242, 260);
+  context.fillText(input.isQuickSale ? "DESTAQUE DO ANÚNCIO" : "DESTAQUE DA LOJA", 242, 260);
 
   const imageX = 92;
   const imageY = 320;

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authRequired, sellerRequired } from "../middlewares/auth.js";
+import { authRequired, sellerRequired, sellerVerificationRequired } from "../middlewares/auth.js";
 import { validateBody, validateQuery } from "../middlewares/validate.js";
 import { createProductSchema, productQuerySchema, reviewSchema, updateProductSchema } from "../schemas/product.schema.js";
 import { ProductService } from "../services/ProductService.js";
@@ -22,7 +22,7 @@ productRoutes.get("/stores/:sellerId", asyncHandler(async (req, res) => {
   res.json(await productService.store(String(req.params.sellerId)));
 }));
 
-productRoutes.post("/uploads", authRequired, sellerRequired, uploadProductImages, asyncHandler(async (req, res) => {
+productRoutes.post("/uploads", authRequired, sellerRequired, sellerVerificationRequired, uploadProductImages, asyncHandler(async (req, res) => {
   const files = req.files as Express.Multer.File[];
   const storage = new FileStorageService();
   res.status(201).json({ images: await storage.uploadProductFiles(files, `${req.protocol}://${req.get("host")}`) });
@@ -32,11 +32,11 @@ productRoutes.get("/:id", asyncHandler(async (req, res) => {
   res.json(await productService.findById(String(req.params.id)));
 }));
 
-productRoutes.post("/", authRequired, sellerRequired, validateBody(createProductSchema), asyncHandler(async (req, res) => {
+productRoutes.post("/", authRequired, sellerRequired, sellerVerificationRequired, validateBody(createProductSchema), asyncHandler(async (req, res) => {
   res.status(201).json(await productService.create(req.user!.sub, req.body));
 }));
 
-productRoutes.patch("/:id", authRequired, sellerRequired, validateBody(updateProductSchema), asyncHandler(async (req, res) => {
+productRoutes.patch("/:id", authRequired, sellerRequired, validateBody(updateProductSchema), sellerVerificationRequired, asyncHandler(async (req, res) => {
   res.json(await productService.update(req.user!.sub, String(req.params.id), req.body));
 }));
 

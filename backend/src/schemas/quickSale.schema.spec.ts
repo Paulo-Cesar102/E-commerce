@@ -1,4 +1,4 @@
-import { createQuickSaleSchema } from "./quickSale.schema.js";
+import { createQuickSaleSchema, quickSaleVerificationSchema } from "./quickSale.schema.js";
 
 describe("createQuickSaleSchema shipping package", () => {
   const listing = {
@@ -28,5 +28,23 @@ describe("createQuickSaleSchema shipping package", () => {
     expect(createQuickSaleSchema.safeParse({ ...listing, heightCm: "0" }).success).toBe(false);
     const { weightGrams: _weight, ...withoutWeight } = listing;
     expect(createQuickSaleSchema.safeParse(withoutWeight).success).toBe(false);
+  });
+
+  it("normalizes and validates CPF check digits before accepting verification", () => {
+    expect(quickSaleVerificationSchema.parse({
+      legalName: "Pessoa Exemplo",
+      cpf: "529.982.247-25",
+      consent: true,
+    })).toMatchObject({ cpf: "52998224725" });
+    expect(quickSaleVerificationSchema.safeParse({
+      legalName: "Pessoa Exemplo",
+      cpf: "111.111.111-11",
+      consent: true,
+    }).success).toBe(false);
+    expect(quickSaleVerificationSchema.safeParse({
+      legalName: "Pessoa Exemplo",
+      cpf: "529.982.247-25",
+      consent: false,
+    }).success).toBe(false);
   });
 });

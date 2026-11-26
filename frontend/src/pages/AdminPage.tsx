@@ -95,7 +95,9 @@ function QuickSalePayoutsPanel() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["quick-sale-payouts"] }),
   });
 
-  return <section className="quick-sale-payout-admin">
+  return <>
+    <QuickSaleVerificationPanel />
+    <section className="quick-sale-payout-admin">
     <header><div><span className="eyebrow">Venda rápida</span><h2>Repasses manuais</h2><p>Elegíveis 7 dias após a entrega, para respeitar o prazo de devolução.</p></div><strong>{payouts.data?.length ?? 0}</strong></header>
     {pay.error && <p className="form-error">{(pay.error as Error).message}</p>}
     {payouts.data?.length ? payouts.data.map((payout) => <div className="quick-sale-payout-row" key={payout.id}>
@@ -106,5 +108,40 @@ function QuickSalePayoutsPanel() {
         if (reference?.trim()) pay.mutate({ id: payout.id, reference: reference.trim() });
       }}>Registrar repasse</button>
     </div>) : <p className="quick-sale-payout-empty">{payouts.isLoading ? "Carregando repasses..." : "Nenhum repasse aguardando transferência."}</p>}
+    </section>
+  </>;
+}
+
+function QuickSaleVerificationPanel() {
+  const queryClient = useQueryClient();
+  const { data } = useQuery({
+    queryKey: ["admin-overview"],
+    queryFn: () => api<Overview & { quickSaleVerifications: Array<{
+      userId: string;
+      legalName: string;
+      cpfLastFour: string;
+      submittedAt: string;
+      user: { name: string; email: string };
+    }> }>("/admin/overview"),
+  });
+  const review = useMutation({
+    mutationFn: ({ userId, status, note }: { userId: string; status: "APPROVED" | "REJECTED"; note?: string }) =>
+      api(`/admin/quick-sale-verifications/${userId}`, { method: "PATCH", body: JSON.stringify({ status, note }) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-overview"] }),
+  });
+
+  return <section className="quick-sale-verification-admin">
+    <header><div><span className="eyebrow">Venda rápida</span><h2>Cadastros para análise manual</h2><p>O CPF passou apenas pela validação dos dígitos; isso não comprova titularidade. Esta etapa não coleta rosto nem prova de vida.</p></div><strong>{data?.quickSaleVerifications.length ?? 0}</strong></header>
+    {review.error && <p className="form-error">{(review.error as Error).message}</p>}
+    {data?.quickSaleVerifications.length ? data.quickSaleVerifications.map((item) => <article className="quick-sale-verification-admin-row" key={item.userId}>
+      <div><strong>{item.legalName}</strong><small>Conta: {item.user.name} · {item.user.email}</small><small>CPF final {item.cpfLastFour} · enviado em {new Date(item.submittedAt).toLocaleDateString("pt-BR")}</small></div>
+      <div className="quick-sale-verification-admin-actions">
+        <button className="button button-primary compact" disabled={review.isPending} onClick={() => review.mutate({ userId: item.userId, status: "APPROVED" })}>Aprovar</button>
+        <button className="button button-dark compact" disabled={review.isPending} onClick={() => {
+          const note = window.prompt("Informe o motivo da rejeição.");
+          if (note?.trim()) review.mutate({ userId: item.userId, status: "REJECTED", note: note.trim() });
+        }}>Rejeitar</button>
+      </div>
+    </article>) : <p className="quick-sale-verification-admin-empty">{data ? "Nenhum cadastro aguardando análise." : "Carregando análises..."}</p>}
   </section>;
 }

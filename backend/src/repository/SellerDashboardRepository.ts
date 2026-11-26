@@ -17,6 +17,13 @@ export class SellerDashboardRepository {
     });
   }
 
+  findQuickSaleVerificationStatus(userId: string) {
+    return prisma.quickSaleVerification.findUnique({
+      where: { userId },
+      select: { status: true },
+    });
+  }
+
   summaryData(sellerId: string) {
     return prisma.$transaction([
       prisma.order.findMany({

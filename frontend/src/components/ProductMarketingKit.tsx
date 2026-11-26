@@ -20,7 +20,7 @@ export function ProductMarketingKit({ product, image }: { product: Product; imag
   async function generateStory() {
     setIsGenerating(true);
     try {
-      await downloadProductStory({ title: product.name, price: formatPrice(product.price), imageUrl: image, storeName: displayName, productId: product.id });
+      await downloadProductStory({ title: product.name, price: formatPrice(product.price), imageUrl: image, storeName: displayName, productId: product.id, isQuickSale });
     } finally {
       setIsGenerating(false);
     }

@@ -721,6 +721,9 @@ main { min-height: 65vh; }
 .plan-card li.muted svg { color: var(--muted); }
 .plan-cancel { width: 100%; margin-top: 11px; border: 0; color: var(--muted); background: transparent; font-size: 11px; text-decoration: underline; }
 .plan-setup-note, .plan-limit-banner { margin-top: 16px; padding: 17px 19px; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: #fff; border: 1px solid var(--line); border-radius: 6px; }
+.seller-verification-banner { margin-bottom: 18px; padding: 17px 19px; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--paper); border: 1px solid rgba(232,85,61,.28); border-radius: 7px; }
+.seller-verification-banner p { margin: 4px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.seller-verification-banner .button { flex: none; }
 .plan-setup-note p, .plan-limit-banner p { margin: 4px 0 0; color: var(--muted); font-size: 11px; }
 .plan-billing-note { color: var(--muted); font-size: 11px; text-align: center; }
 .local-store-filter { margin: 16px 0; padding: 15px 18px; display: flex; align-items: center; gap: 12px; background: var(--surface-soft); border: 1px solid var(--line); border-radius: 5px; }
@@ -739,6 +742,33 @@ main { min-height: 65vh; }
 .quick-sale-plan-note strong { display: block; margin-bottom: 4px; font-size: 14px; }
 .quick-sale-plan-note p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .quick-sale-plan-note .button { flex: none; min-height: 40px; border-radius: 8px; }
+.quick-sale-verification { margin-bottom: 18px; padding: 20px 22px; display: flex; align-items: flex-start; gap: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); }
+.quick-sale-verification.approved { border-color: rgba(36, 132, 87, .35); background: linear-gradient(110deg, rgba(36,132,87,.08), var(--paper) 60%); }
+.quick-sale-verification-icon { width: 42px; height: 42px; flex: 0 0 42px; display: grid; place-items: center; color: var(--coral-dark); background: rgba(232,85,61,.12); border-radius: 11px; }
+.quick-sale-verification.approved .quick-sale-verification-icon { color: #15583d; background: #d9f1e4; }
+.quick-sale-verification-content { min-width: 0; flex: 1; display: grid; gap: 8px; }
+.quick-sale-verification-content > strong { font-size: 14px; }
+.quick-sale-verification-content > p, .quick-sale-verification-content > small { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.quick-sale-verification-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.quick-sale-verification-form > label:not(.quick-sale-verification-consent) { display: grid; gap: 6px; font-size: 11px; font-weight: 800; }
+.quick-sale-verification-form input:not([type="checkbox"]) { width: 100%; height: 42px; padding: 0 11px; color: var(--ink); background: var(--surface-raised); border: 1px solid var(--line); border-radius: 8px; }
+.quick-sale-verification-form .quick-sale-verification-consent { grid-column: 1 / -1; display: flex; align-items: flex-start; gap: 8px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.quick-sale-verification-consent input { margin-top: 2px; accent-color: var(--coral); }
+.quick-sale-verification-form .form-error { grid-column: 1 / -1; margin: 0; }
+.quick-sale-verification-form .button { justify-self: start; min-height: 40px; border-radius: 8px; }
+.quick-sale-verification-blocked { margin: 0 0 18px; padding: 14px 17px; color: #775600; background: #fff7df; border: 1px solid #f0dfab; border-radius: 10px; }
+.quick-sale-verification-blocked strong { font-size: 12px; }
+.quick-sale-verification-blocked p { margin: 4px 0 0; font-size: 11px; line-height: 1.45; }
+.quick-sale-verification-admin { margin: 18px 0; padding: 22px; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; }
+.quick-sale-verification-admin > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.quick-sale-verification-admin h2 { margin: 4px 0; font-size: 18px; }
+.quick-sale-verification-admin header p { max-width: 700px; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.quick-sale-verification-admin-row { padding: 13px 0; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line); }
+.quick-sale-verification-admin-row > div:first-child { min-width: 0; display: grid; gap: 4px; }
+.quick-sale-verification-admin-row strong { font-size: 12px; }
+.quick-sale-verification-admin-row small, .quick-sale-verification-admin-empty { color: var(--muted); font-size: 10px; }
+.quick-sale-verification-admin-actions { display: flex; flex: none; gap: 8px; }
+.quick-sale-verification-admin-empty { margin: 15px 0 0; }
 .quick-sale-create, .quick-sale-listings, .quick-sale-orders { margin-top: 18px; padding: 23px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); }
 .quick-sale-create > header, .quick-sale-listings > header, .quick-sale-orders > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .quick-sale-create > header { justify-content: flex-start; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
@@ -1178,6 +1208,16 @@ main { min-height: 65vh; }
   .quick-sale-plan-note { align-items: flex-start; flex-wrap: wrap; padding: 16px; }
   .quick-sale-plan-note > div { flex-basis: calc(100% - 60px); }
   .quick-sale-plan-note .button { width: 100%; margin-left: 59px; }
+  .quick-sale-verification { padding: 16px; }
+  .quick-sale-verification-form { grid-template-columns: 1fr; }
+  .quick-sale-verification-form .quick-sale-verification-consent, .quick-sale-verification-form .form-error { grid-column: 1; }
+  .quick-sale-verification-form .button { width: 100%; }
+  .quick-sale-verification-admin { padding: 16px; }
+  .quick-sale-verification-admin-row { align-items: flex-start; flex-direction: column; }
+  .quick-sale-verification-admin-actions { width: 100%; }
+  .quick-sale-verification-admin-actions .button { flex: 1; }
+  .seller-verification-banner { align-items: flex-start; flex-direction: column; }
+  .seller-verification-banner .button { width: 100%; }
   .quick-sale-create, .quick-sale-listings, .quick-sale-orders { padding: 15px; border-radius: 11px; }
   .quick-sale-create > header { margin-bottom: 15px; }
   .quick-sale-form-grid { grid-template-columns: 1fr; gap: 12px; }

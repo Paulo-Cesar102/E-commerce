@@ -47,6 +47,26 @@ export const sellerRequired: RequestHandler = async (req, _res, next) => {
   next();
 };
 
+export const sellerVerificationRequired: RequestHandler = async (req, _res, next) => {
+  if (!req.user || req.user.role === "ADMIN") {
+    next();
+    return;
+  }
+  if (req.method === "PATCH" && req.body?.status === "INACTIVE") {
+    next();
+    return;
+  }
+
+  const verification = await prisma.quickSaleVerification.findUnique({
+    where: { userId: req.user.sub },
+    select: { status: true },
+  });
+  if (verification?.status !== "APPROVED") {
+    throw new AppError(403, "SELLER_IDENTITY_VERIFICATION_REQUIRED");
+  }
+  next();
+};
+
 export const adminRequired: RequestHandler = (req, _res, next) => {
   if (!req.user || req.user.role !== "ADMIN") throw new AppError(403, "Acesso permitido apenas para administradores");
   next();

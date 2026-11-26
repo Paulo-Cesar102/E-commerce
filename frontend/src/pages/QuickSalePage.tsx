@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BadgeCheck, ImagePlus, PackageCheck, Plus, Store, Truck } from "lucide-react";
+import { BadgeCheck, ImagePlus, PackageCheck, Plus, ShieldCheck, Store, Truck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { formatPrice } from "../lib/format";
@@ -12,6 +12,14 @@ type QuickSaleData = {
   hasPro: boolean;
   activeCount: number;
   activeLimit: number | null;
+  verification: {
+    legalName: string;
+    cpfLastFour: string;
+    status: "PENDING" | "APPROVED" | "REJECTED";
+    submittedAt: string;
+    reviewedAt: string | null;
+    reviewNote: string | null;
+  } | null;
   listings: Product[];
   orders: Array<Order & {
     sellerNet: number;
@@ -73,6 +81,23 @@ export function QuickSalePage() {
       api(`/quick-sales/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status, trackingCodes }) }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["quick-sales", "mine"] }),
   });
+  const submitVerification = useMutation({
+    mutationFn: (form: HTMLFormElement) => {
+      const values = new FormData(form);
+      return api("/quick-sales/verification", {
+        method: "POST",
+        body: JSON.stringify({
+          legalName: values.get("legalName"),
+          cpf: values.get("cpf"),
+          consent: values.get("consent") === "on",
+        }),
+      });
+    },
+    onSuccess: (_result, form) => {
+      form.reset();
+      queryClient.invalidateQueries({ queryKey: ["quick-sales", "mine"] });
+    },
+  });
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -84,15 +109,43 @@ export function QuickSalePage() {
   if (error || !data) return <div className="page-container"><ErrorState message={(error as Error)?.message ?? "Não foi possível carregar seus anúncios."} /></div>;
 
   const atLimit = data.activeLimit !== null && data.activeCount >= data.activeLimit;
+  const isVerified = data.verification?.status === "APPROVED";
   return <div className="page-container quick-sale-page">
     <PageHeading eyebrow="Venda rápida" title="Anuncie algo seu" description="Venda pelo checkout da Vitrine. A comissão é 5% do valor do item; o frete é calculado pelos Correios." />
+    <section className={`quick-sale-verification${isVerified ? " approved" : ""}`}>
+      <span className="quick-sale-verification-icon"><ShieldCheck /></span>
+      <div className="quick-sale-verification-content">
+        <strong>{isVerified ? "Cadastro aprovado para Venda rápida" : data.verification?.status === "PENDING" ? "Cadastro em análise" : "Antes de anunciar, confirme seus dados"}</strong>
+        <p>{isVerified
+          ? `Cadastro aprovado para Venda rápida. CPF final ${data.verification?.cpfLastFour}; nenhum dado facial foi coletado.`
+          : data.verification?.status === "PENDING"
+            ? `Recebemos os dados de ${data.verification.legalName}. A análise é manual; aguarde a aprovação para publicar.`
+            : "Informe seu nome e CPF para solicitar uma análise manual. Só guardamos um identificador protegido do CPF e os quatro últimos dígitos."}</p>
+        {!isVerified && data.verification?.status !== "PENDING" && <form className="quick-sale-verification-form" onSubmit={(event) => {
+          event.preventDefault();
+          submitVerification.mutate(event.currentTarget);
+        }}>
+          <label>Nome completo<input name="legalName" required minLength={2} maxLength={120} autoComplete="name" placeholder="Como aparece no documento" /></label>
+          <label>CPF<input name="cpf" required inputMode="numeric" autoComplete="off" maxLength={14} placeholder="000.000.000-00" onChange={(event) => {
+            const digits = event.currentTarget.value.replace(/\D/g, "").slice(0, 11);
+            event.currentTarget.value = digits.replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+          }} /></label>
+          <label className="quick-sale-verification-consent"><input name="consent" type="checkbox" required /><span>Aceito usar meu nome e CPF nesta análise manual para liberar anúncios de Venda rápida.</span></label>
+          {data.verification?.reviewNote && <p className="form-error">{data.verification.reviewNote}</p>}
+          {submitVerification.error && <p className="form-error">{(submitVerification.error as Error).message}</p>}
+          <button className="button button-primary" disabled={submitVerification.isPending}>{submitVerification.isPending ? "Enviando..." : data.verification?.status === "REJECTED" ? "Corrigir e reenviar" : "Enviar para análise"}</button>
+        </form>}
+        {!isVerified && <small>A validação confere somente o formato e os dígitos do CPF; não consulta a Receita Federal nem confirma titularidade. Verificação facial/prova de vida não está disponível nesta etapa. Os dados podem ser exportados e são removidos quando a conta é excluída.</small>}
+      </div>
+    </section>
+    {!isVerified && <section className="quick-sale-verification-blocked"><strong>Publicação bloqueada até a aprovação</strong><p>Você poderá criar ou reativar anúncios depois que a análise terminar.</p></section>}
     <section className="quick-sale-plan-note">
       <span className="quick-sale-plan-icon">{data.hasPro ? <BadgeCheck /> : <Store />}</span>
       <div><strong>{data.hasPro ? "Pro: anúncios ativos ilimitados" : "Grátis: um anúncio ativo por vez"}</strong><p>{data.hasPro ? "Sua assinatura Pro atual também libera anúncios de Venda rápida." : `${data.activeCount}/1 anúncio ativo. Desative o anúncio atual para publicar outro.`}</p></div>
       {!data.hasPro && <Link className="button button-dark" to="/dashboard?tab=plan">Conhecer o Pro</Link>}
     </section>
 
-    <section className="quick-sale-create">
+    {isVerified && <section className="quick-sale-create">
       <header><span><Plus size={18} /></span><div><h2>Novo anúncio</h2><p>O item será publicado com estoque único.</p></div></header>
       <form id="quick-sale-form" onSubmit={submit}>
         <div className="quick-sale-form-grid">
@@ -112,7 +165,7 @@ export function QuickSalePage() {
         {(create.error || update.error || updateOrder.error) && <p className="form-error">{((create.error ?? update.error ?? updateOrder.error) as Error).message}</p>}
         <button className="button button-primary" disabled={create.isPending || atLimit || !images.length}>{create.isPending ? "Publicando..." : atLimit ? "Limite de anúncio atingido" : "Publicar anúncio"}</button>
       </form>
-    </section>
+    </section>}
 
     <section className="quick-sale-listings">
       <header><div><span className="eyebrow">Seus itens</span><h2>Meus anúncios</h2></div><Link to="/buscar?sort=new">Ver catálogo</Link></header>
@@ -120,7 +173,7 @@ export function QuickSalePage() {
         <img src={imageUrl(listing.images[0]?.url)} onError={useFallbackImage} alt="" />
         <div className="quick-sale-item"><strong>{listing.name}</strong><span>{listing.status === "ACTIVE" ? "Ativo" : "Inativo"} · {listing.stock > 0 ? "Disponível" : "Reservado/vendido"}</span><b>{formatPrice(listing.price)}</b></div>
         <Link className="button button-ghost compact" to={`/produto/${listing.id}`}>Abrir</Link>
-        {listing.stock > 0 && <button className="button button-dark compact" onClick={() => update.mutate({ id: listing.id, status: listing.status === "ACTIVE" ? "INACTIVE" : "ACTIVE" })} disabled={update.isPending || (listing.status === "INACTIVE" && atLimit)}>{listing.status === "ACTIVE" ? "Desativar" : "Ativar"}</button>}
+        {listing.stock > 0 && <button className="button button-dark compact" onClick={() => update.mutate({ id: listing.id, status: listing.status === "ACTIVE" ? "INACTIVE" : "ACTIVE" })} disabled={update.isPending || (listing.status === "INACTIVE" && (!isVerified || atLimit))}>{listing.status === "ACTIVE" ? "Desativar" : "Ativar"}</button>}
       </article>)}</div> : <EmptyState title="Nenhum anúncio ainda" text="Publique seu primeiro item para começar a vender." />}
     </section>
 

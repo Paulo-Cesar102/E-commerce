@@ -8,6 +8,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
   JWT_SECRET: z.string().min(32),
+  QUICK_SALE_CPF_HASH_SECRET: z.string().min(32).optional(),
   GOOGLE_CLIENT_ID: z.string().min(1).optional(),
   JWT_EXPIRES_IN: z.string().default("15m"),
   REFRESH_TOKEN_EXPIRES_DAYS: z.coerce.number().default(7),
@@ -35,7 +36,7 @@ const envSchema = z.object({
 export const env = envSchema.parse(process.env);
 
 if (env.NODE_ENV === "production") {
-  const required = ["CORS_ORIGIN", "MERCADO_PAGO_ACCESS_TOKEN", "MERCADO_PAGO_WEBHOOK_SECRET", "API_PUBLIC_URL", "CORREIOS_QUOTE_URL", "CORREIOS_API_TOKEN"] as const;
+  const required = ["CORS_ORIGIN", "MERCADO_PAGO_ACCESS_TOKEN", "MERCADO_PAGO_WEBHOOK_SECRET", "API_PUBLIC_URL", "CORREIOS_QUOTE_URL", "CORREIOS_API_TOKEN", "QUICK_SALE_CPF_HASH_SECRET"] as const;
   for (const key of required) if (!env[key]) throw new Error(`${key} e obrigatoria em producao`);
   if (!env.COOKIE_SECURE) throw new Error("COOKIE_SECURE deve ser true em producao");
   if (!env.API_PUBLIC_URL?.startsWith("https://")) throw new Error("API_PUBLIC_URL deve usar HTTPS em producao");

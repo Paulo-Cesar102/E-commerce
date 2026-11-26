@@ -3,6 +3,83 @@ import type { Prisma } from "../../generated/prisma/index.js";
 import { AppError } from "../errors/AppError.js";
 
 export class QuickSaleRepository {
+  findVerification(userId: string) {
+    return prisma.quickSaleVerification.findUnique({
+      where: { userId },
+      select: {
+        legalName: true,
+        cpfLastFour: true,
+        status: true,
+        submittedAt: true,
+        reviewedAt: true,
+        reviewNote: true,
+      },
+    });
+  }
+
+  submitVerification(input: {
+    userId: string;
+    legalName: string;
+    cpfHash: string;
+    cpfLastFour: string;
+  }) {
+    return prisma.$transaction(async (tx) => {
+      const submittedAt = new Date();
+      const verification = await tx.quickSaleVerification.upsert({
+        where: { userId: input.userId },
+        update: {
+          legalName: input.legalName,
+          cpfHash: input.cpfHash,
+          cpfLastFour: input.cpfLastFour,
+          status: "PENDING",
+          submittedAt,
+          reviewedAt: null,
+          reviewNote: null,
+        },
+        create: {
+          userId: input.userId,
+          legalName: input.legalName,
+          cpfHash: input.cpfHash,
+          cpfLastFour: input.cpfLastFour,
+          submittedAt,
+        },
+        select: {
+          legalName: true,
+          cpfLastFour: true,
+          status: true,
+          submittedAt: true,
+          reviewedAt: true,
+          reviewNote: true,
+        },
+      });
+      await tx.userConsent.upsert({
+        where: {
+          userId_type_version: {
+            userId: input.userId,
+            type: "QUICK_SALE_CPF_REVIEW",
+            version: "2026-11",
+          },
+        },
+        update: { grantedAt: submittedAt, revokedAt: null },
+        create: {
+          userId: input.userId,
+          type: "QUICK_SALE_CPF_REVIEW",
+          version: "2026-11",
+          grantedAt: submittedAt,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          userId: input.userId,
+          action: "QUICK_SALE_VERIFICATION_SUBMITTED",
+          entityType: "QuickSaleVerification",
+          entityId: input.userId,
+        },
+      });
+      return verification;
+    });
+  }
+
   countActiveListings(userId: string, exceptProductId?: string) {
     return prisma.product.count({
       where: {

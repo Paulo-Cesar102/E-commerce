@@ -1,4 +1,7 @@
+import { createHmac } from "node:crypto";
+import { Prisma } from "../../generated/prisma/index.js";
 import { AppError } from "../errors/AppError.js";
+import { env } from "../config/env.js";
 import { QuickSaleRepository } from "../repository/QuickSaleRepository.js";
 import { FileStorageService } from "./FileStorageService.js";
 import { SellerPlanService } from "./SellerPlanService.js";
@@ -31,16 +34,18 @@ export class QuickSaleService {
 
   async getMine(userId: string) {
     const unlimited = await this.sellerPlans.hasProPlanForUser(userId);
-    const [activeCount, listings, orders] = await Promise.all([
+    const [activeCount, listings, orders, verification] = await Promise.all([
       this.repository.countActiveListings(userId),
       this.repository.findMine(userId),
       this.repository.findMySales(userId),
+      this.repository.findVerification(userId),
     ]);
     return {
       hasPro: unlimited,
       activeCount,
       activeLimit: unlimited ? null : 1,
       listings,
+      verification,
       orders: orders.map((order) => ({
         ...order,
         sellerNet: Number(order.subtotal) - Number(order.discount) - Number(order.platformFee),
@@ -48,8 +53,41 @@ export class QuickSaleService {
     };
   }
 
+  async assertVerified(userId: string) {
+    const verification = await this.repository.findVerification(userId);
+    if (verification?.status !== "APPROVED") {
+      throw new AppError(403, "Envie seu CPF e aguarde a análise manual antes de anunciar");
+    }
+  }
+
+  async submitVerification(userId: string, input: { legalName: string; cpf: string }) {
+    const current = await this.repository.findVerification(userId);
+    if (current?.status === "APPROVED") {
+      throw new AppError(409, "Sua verificação para Venda rápida já foi aprovada");
+    }
+    const cpf = input.cpf.replace(/\D/g, "");
+    const cpfHash = createHmac("sha256", env.QUICK_SALE_CPF_HASH_SECRET ?? env.JWT_SECRET)
+      .update(`quick-sale-cpf:${cpf}`)
+      .digest("hex");
+
+    try {
+      return await this.repository.submitVerification({
+        userId,
+        legalName: input.legalName.trim(),
+        cpfHash,
+        cpfLastFour: cpf.slice(-4),
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        throw new AppError(409, "Este CPF já está associado a outra conta");
+      }
+      throw error;
+    }
+  }
+
   async create(userId: string, input: QuickSaleInput) {
     try {
+      await this.assertVerified(userId);
       if (!(await this.repository.findActiveCategory(input.categoryId))) {
         throw new AppError(400, "Categoria invalida");
       }
@@ -62,6 +100,7 @@ export class QuickSaleService {
   }
 
   async updateListingStatus(userId: string, productId: string, status: "ACTIVE" | "INACTIVE") {
+    if (status === "ACTIVE") await this.assertVerified(userId);
     const unlimited = await this.sellerPlans.hasProPlanForUser(userId);
     return this.repository.setListingStatus(productId, userId, status, unlimited);
   }

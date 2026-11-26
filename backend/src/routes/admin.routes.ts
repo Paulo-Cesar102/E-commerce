@@ -33,6 +33,14 @@ const validateCouponRules = (coupon: {
 const couponSchema = couponFieldsSchema.superRefine(validateCouponRules);
 const couponPatchSchema = couponFieldsSchema.partial().superRefine(validateCouponRules);
 const kycSchema = z.object({ approvalStatus: z.enum(["APPROVED", "REJECTED", "SUSPENDED", "PENDING"]), kycReviewNote: z.string().max(500).optional() });
+const quickSaleVerificationReviewSchema = z.object({
+  status: z.enum(["APPROVED", "REJECTED"]),
+  note: z.string().trim().min(3).max(500).optional(),
+}).superRefine((input, context) => {
+  if (input.status === "REJECTED" && !input.note) {
+    context.addIssue({ code: "custom", path: ["note"], message: "Informe o motivo da rejeição" });
+  }
+});
 const withdrawalSchema = z.object({ amount: z.number().positive().max(1_000_000) });
 const withdrawalStatusSchema = z.object({
   status: z.enum(["APPROVED", "REJECTED", "PAID"]),
@@ -94,8 +102,20 @@ adminRoutes.patch("/quick-sale-payouts/:orderId", validateBody(quickSalePayoutSc
 
 adminRoutes.get("/overview", asyncHandler(async (_req, res) => {
   const paidOrderWhere: Prisma.OrderWhereInput = { payment: { status: "APPROVED" }, status: { in: ["PAID", "PREPARING", "SHIPPED", "DELIVERED"] } };
-  const [pendingKyc, products, orders, coupons, paidOrders, paidOrderCount, feeOrders, sellers, sellerSales, supportChats, withdrawals, subscriptionPayments, reservedWithdrawals, pendingWithdrawals] = await Promise.all([
+  const [pendingKyc, quickSaleVerifications, products, orders, coupons, paidOrders, paidOrderCount, feeOrders, sellers, sellerSales, supportChats, withdrawals, subscriptionPayments, reservedWithdrawals, pendingWithdrawals] = await Promise.all([
     prisma.sellerProfile.findMany({ where: { approvalStatus: "PENDING" }, include: { user: { select: { id: true, name: true, email: true } } }, orderBy: { kycSubmittedAt: "asc" } }),
+    prisma.quickSaleVerification.findMany({
+      where: { status: "PENDING" },
+      select: {
+        userId: true,
+        legalName: true,
+        cpfLastFour: true,
+        submittedAt: true,
+        user: { select: { name: true, email: true } },
+      },
+      orderBy: { submittedAt: "asc" },
+      take: 100,
+    }),
     prisma.product.findMany({ include: { seller: { select: { storeName: true } }, ownerUser: { select: { name: true } }, category: true }, orderBy: { createdAt: "desc" }, take: 100 }),
     prisma.order.findMany({ include: { customer: { select: { name: true, email: true } }, seller: { select: { storeName: true } }, directSeller: { select: { name: true } }, payment: true }, orderBy: { createdAt: "desc" }, take: 100 }),
     prisma.coupon.findMany({ orderBy: { createdAt: "desc" } }),
@@ -118,7 +138,7 @@ adminRoutes.get("/overview", asyncHandler(async (_req, res) => {
   const platformFees = Number(paidOrders._sum?.platformFee ?? 0);
   const subscriptionRevenue = Number(subscriptionPayments._sum.amount ?? 0);
   const platformRevenue = platformFees + subscriptionRevenue;
-  res.json({ pendingKyc, products, coupons, orders, sellers: sellers.map((seller) => ({ ...seller, sales: sellerSalesMap[seller.id] ?? { total: 0, platformFee: 0, orders: 0 } })), supportChats, withdrawals, finance: { grossSales: paidOrders._sum?.total ?? 0, platformFees, subscriptionRevenue, platformRevenue, availableFees: Math.max(0, platformRevenue - reserved), pendingFees: pending, paidOrders: paidOrderCount, recentFees: feeOrders, salesChart } });
+  res.json({ pendingKyc, quickSaleVerifications, products, coupons, orders, sellers: sellers.map((seller) => ({ ...seller, sales: sellerSalesMap[seller.id] ?? { total: 0, platformFee: 0, orders: 0 } })), supportChats, withdrawals, finance: { grossSales: paidOrders._sum?.total ?? 0, platformFees, subscriptionRevenue, platformRevenue, availableFees: Math.max(0, platformRevenue - reserved), pendingFees: pending, paidOrders: paidOrderCount, recentFees: feeOrders, salesChart } });
 }));
 adminRoutes.get("/seller-withdrawals", asyncHandler(async (_req, res) => {
   const withdrawals = await prisma.withdrawal.findMany({
@@ -135,6 +155,29 @@ adminRoutes.patch("/kyc/:sellerId", validateBody(kycSchema), asyncHandler(async 
   notifyAdminDashboard(req, "KYC_UPDATED");
   res.json(result);
 }));
+adminRoutes.patch("/quick-sale-verifications/:userId", validateBody(quickSaleVerificationReviewSchema), asyncHandler(async (req, res) => {
+  const userId = String(req.params.userId);
+  const reviewedAt = new Date();
+  await prisma.$transaction(async (tx) => {
+    const result = await tx.quickSaleVerification.updateMany({
+      where: { userId, status: "PENDING" },
+      data: { status: req.body.status, reviewNote: req.body.note, reviewedAt },
+    });
+    if (result.count !== 1) throw new AppError(409, "Esta verificação já foi analisada ou não existe");
+    await tx.auditLog.create({
+      data: {
+        userId: req.user!.sub,
+        action: `QUICK_SALE_VERIFICATION_${req.body.status}`,
+        entityType: "QuickSaleVerification",
+        entityId: userId,
+        metadata: { note: req.body.note },
+      },
+    });
+  });
+  notifyAdminDashboard(req, "QUICK_SALE_VERIFICATION_UPDATED");
+  res.json({ status: req.body.status, reviewedAt });
+}));
+
 adminRoutes.get("/coupons", asyncHandler(async (_req, res) => {
   res.json(await prisma.coupon.findMany({ orderBy: { createdAt: "desc" } }));
 }));

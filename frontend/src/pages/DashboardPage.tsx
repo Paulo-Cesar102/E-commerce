@@ -11,7 +11,7 @@ import { ErrorState, Loader, StatusBadge } from "../components/UI";
 import { useSearchParams } from "react-router-dom";
 
 type Dashboard = {
-  seller: { id: string; storeName: string; description?: string; postalCode?: string; whatsappPhone?: string | null; city?: string | null; state?: string | null };
+  seller: { id: string; storeName: string; description?: string; postalCode?: string; whatsappPhone?: string | null; city?: string | null; state?: string | null; quickSaleVerificationStatus: "PENDING" | "APPROVED" | "REJECTED" | null };
   plan: SellerPlan;
   totalSales: number;
   revenue: number;
@@ -58,7 +58,7 @@ export function DashboardPage() {
   if (error || !data) {
     const message = (error as Error)?.message ?? "Não foi possível abrir o painel.";
     if (message.includes("PENDING") || message.toLowerCase().includes("aguardando aprovacao")) {
-      return <div className="seller-approval-page"><div className="seller-approval-card"><span className="seller-approval-icon"><Clock3 size={28} /></span><span className="eyebrow">Conta em análise</span><h1>Estamos revisando sua loja</h1><p>Seu cadastro foi recebido e está aguardando aprovação administrativa. Assim que sua conta for aprovada, você poderá cadastrar produtos e começar a vender.</p><div className="seller-approval-status"><span><i /> Status atual</span><strong>Aguardando aprovação</strong></div><div className="seller-approval-actions"><a className="button button-primary" href="/">Voltar para a Vitrine <ArrowRight size={17} /></a><a className="seller-approval-link" href="/chat">Falar com o suporte</a></div></div></div>;
+      return <div className="seller-approval-page"><div className="seller-approval-card"><span className="seller-approval-icon"><Clock3 size={28} /></span><span className="eyebrow">Conta em análise</span><h1>Estamos revisando sua loja</h1><p>Seu cadastro foi recebido e está aguardando aprovação administrativa. Você pode enviar seu CPF para análise manual na Venda rápida enquanto isso.</p><div className="seller-approval-status"><span><i /> Status atual</span><strong>Aguardando aprovação</strong></div><div className="seller-approval-actions"><a className="button button-primary" href="/anunciar">Enviar CPF para análise <ArrowRight size={17} /></a><a className="seller-approval-link" href="/chat">Falar com o suporte</a></div></div></div>;
     }
     return <div className="dashboard-error"><ErrorState message={message} /></div>;
   }
@@ -146,6 +146,7 @@ function PlanView({ plan, onSettings }: { plan: SellerPlan; onSettings: () => vo
 function Overview({ data, onNavigate }: { data: Dashboard; onNavigate: (tab: Tab) => void }) {
   const activeProducts = data.products.filter((product) => product.status === "ACTIVE").length;
   return <div className="dashboard-content">
+    {data.seller.quickSaleVerificationStatus !== "APPROVED" && <section className="seller-verification-banner"><div><strong>{data.seller.quickSaleVerificationStatus === "PENDING" ? "Seu CPF está em análise" : data.seller.quickSaleVerificationStatus === "REJECTED" ? "Envie novamente seus dados de vendedor" : "Verifique seus dados para publicar produtos"}</strong><p>O cadastro e o CPF precisam ser aprovados antes de criar ou reativar anúncios. Esta etapa é manual e não inclui verificação facial.</p></div><a className="button button-primary" href="/anunciar">{data.seller.quickSaleVerificationStatus === "PENDING" ? "Acompanhar" : "Enviar CPF"} <ArrowRight size={17} /></a></section>}
     <div className="metric-grid">
       <article><span className="metric-icon coral"><CircleDollarSign /></span><div><small>Faturamento</small><strong>{formatPrice(data.revenue)}</strong><span>Vendas aprovadas</span></div></article>
       <article><span className="metric-icon green"><PackageCheck /></span><div><small>Total de vendas</small><strong>{data.totalSales}</strong><span>Pedidos pagos</span></div></article>

@@ -31,3 +31,16 @@ As cobranças recorrentes confirmadas são registradas separadamente da comissã
 - Login, Google e recuperação de senha permitem até 8 tentativas por 15 minutos; cadastro permite 5 e renovação de sessão, 30.
 - A busca de produtos aceita até 30 resultados por página e páginas de 1 a 1.000.
 
+## Demonstração local
+
+Para criar anúncios ilustrativos com imagens por categoria e contas de exemplo, execute o seed do backend somente em `development` ou `test`. Os registros não são criados por padrão e o seed recusa esse modo se `NODE_ENV` estiver diferente:
+
+```powershell
+$env:NODE_ENV = "development"
+$env:SEED_DEMO_DATA = "true"
+$env:DEMO_SEED_PASSWORD = Read-Host "Defina uma senha para as contas de demonstração"
+npm run prisma:seed
+```
+
+As contas são `demo-pro@vitrine.local`, `demo-free@vitrine.local` e `demo-cliente@vitrine.local`; todas usam a senha informada no comando. Os dados incluem uma compra e pagamento fictícios para a demonstração. Nunca execute com `NODE_ENV=production` nem use as contas em produção.
+
