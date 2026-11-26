@@ -325,7 +325,7 @@ main { min-height: 65vh; }
 .password-input button { position: absolute; right: 4px; top: 3px; width: 38px; height: 38px; border: 0; background: transparent; }
 .role-selector { margin: 20px 0 8px; display: grid; grid-template-columns: 1fr 1fr; padding: 4px; background: var(--surface-soft); border: 1px solid var(--line); border-radius: 9px; }
 .role-selector button { min-height: 40px; border: 0; color: var(--muted); background: transparent; border-radius: 6px; font-weight: 750; display: flex; align-items: center; justify-content: center; gap: 6px; transition: background .18s ease, color .18s ease; }
-.role-selector button.active { color: #fff; background: var(--ink); box-shadow: 0 3px 9px rgba(0,0,0,.12); }
+.role-selector button.active { color: #000000; background: var(--ink); box-shadow: 0 3px 9px rgba(0,0,0,.12); }
 .auth-plan-selection { margin: 18px 0 20px; }
 .auth-plan-heading { margin-bottom: 10px; }
 .auth-plan-heading .eyebrow { color: var(--coral-dark); font-size: 10px; }
