@@ -40,7 +40,7 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
     });
     return response.data;
   } catch (caught) {
-    const error = caught as AxiosError<{ message?: string }>;
+    const error = caught as AxiosError<{ message?: string; details?: string; issues?: Array<{ path?: Array<string | number>; message?: string }> }>;
 
     if (error.response?.status === 401 && retry !== false) {
       try {
@@ -52,8 +52,14 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
       }
     }
 
+    const responseMessage = error.response?.data?.message ?? "Nao foi possivel concluir a operacao";
+    const validationDetails = error.response?.data?.issues
+      ?.map((issue) => `${issue.path?.join(".") || "campo"}: ${issue.message ?? "valor invalido"}`)
+      .join("; ");
+    const responseDetails = error.response?.data?.details;
+
     throw new ApiError(
-      error.response?.data?.message ?? "Nao foi possivel concluir a operacao",
+      validationDetails ? `${responseMessage}: ${validationDetails}` : responseDetails ? `${responseMessage}: ${responseDetails}` : responseMessage,
       error.response?.status ?? 500,
     );
   }

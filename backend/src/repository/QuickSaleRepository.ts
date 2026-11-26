@@ -31,7 +31,7 @@ export class QuickSaleRepository {
     images: { url: string; alt?: string }[];
   }, unlimited: boolean) {
     return prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${userId}, 0))`;
+      await tx.$queryRaw`WITH lock AS MATERIALIZED (SELECT pg_advisory_xact_lock(hashtextextended(${userId}, 0))) SELECT true AS locked FROM lock`;
       if (!unlimited && await tx.product.count({
         where: { ownerUserId: userId, listingType: "QUICK_SALE", status: "ACTIVE" },
       }) >= 1) {
@@ -67,7 +67,7 @@ export class QuickSaleRepository {
 
   async setListingStatus(productId: string, userId: string, status: "ACTIVE" | "INACTIVE", unlimited: boolean) {
     return prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${userId}, 0))`;
+      await tx.$queryRaw`WITH lock AS MATERIALIZED (SELECT pg_advisory_xact_lock(hashtextextended(${userId}, 0))) SELECT true AS locked FROM lock`;
       const listing = await tx.product.findFirst({
         where: { id: productId, ownerUserId: userId, listingType: "QUICK_SALE" },
         select: { id: true, status: true, stock: true },

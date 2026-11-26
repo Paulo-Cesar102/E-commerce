@@ -17,5 +17,8 @@ export const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
   }
 
   console.error(error);
-  res.status(500).json({ message: "Erro interno do servidor" });
+  res.status(500).json({
+    message: "Erro interno do servidor",
+    ...(process.env.NODE_ENV !== "production" && error instanceof Error ? { details: error.message } : {}),
+  });
 };
