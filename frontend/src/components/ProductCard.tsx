@@ -53,7 +53,7 @@ export function ProductCard({ product }: { product: Product }) {
           <div><strong>{formatPrice(product.price)}</strong><small>{isQuickSale ? `Venda rápida · ${product.ownerUser?.name ?? "item independente"}` : isFreeStore ? `${product.seller?.city ?? "Local"} · pedido local` : "em até 10x"}</small></div>
           {isFreeStore
             ? whatsappUrl
-              ? <a className="add-cart-icon" href={whatsappUrl} target="_blank" rel="noreferrer" aria-label="Pedir pelo WhatsApp"><MessageCircle size={18} /></a>
+              ? <Link className="add-cart-icon" to={`/produto/${product.id}`} aria-label="Pedir pelo WhatsApp"><MessageCircle size={18} /></Link>
               : <Link className="add-cart-icon" to={`/produto/${product.id}`} aria-label="Ver produto"><ShoppingBag size={18} /></Link>
             : <button className="add-cart-icon" onClick={addToCart} disabled={add.isPending || product.stock === 0} aria-label="Adicionar ao carrinho"><ShoppingBag size={18} /></button>}
         </div>

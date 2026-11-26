@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronRight, Heart, MessageCircle, Minus, Plus, ShieldCheck, ShoppingBag, Star, Truck } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -19,6 +19,7 @@ export function ProductPage() {
   const queryClient = useQueryClient();
   const accessToken = useAuthStore((state) => state.accessToken);
   const [quantity, setQuantity] = useState(1);
+  const [showFreeOrderForm, setShowFreeOrderForm] = useState(false);
   const [activeImage, setActiveImage] = useState(0);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
   const { data, isLoading, error } = useQuery({
@@ -55,6 +56,31 @@ export function ProductPage() {
     ? `https://wa.me/${product.seller.whatsappPhone.replace(/\D/g, "")}?text=${encodeURIComponent(`Olá! Tenho interesse em ${quantity} unidade(s) de ${product.name}${selectedVariant ? ` (${selectedVariant.sku})` : ""}.`)}`
     : null;
 
+  function sendFreeOrder(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!product.seller?.whatsappPhone) return;
+    const fields = new FormData(event.currentTarget);
+    const unitPrice = Number(selectedVariant?.price ?? product.price);
+    const variantLabel = selectedVariant ? ` · Variação: ${Object.values(selectedVariant.attributes).join(" / ")} (SKU ${selectedVariant.sku})` : "";
+    const address = [
+      fields.get("recipient"), `${fields.get("street")}, ${fields.get("number")}`,
+      fields.get("complement"), fields.get("district"),
+      `${fields.get("city")}/${String(fields.get("state")).toUpperCase()}`, `CEP ${fields.get("postalCode")}`,
+    ].filter(Boolean).join(", ");
+    const message = [
+      `Olá, ${product.seller.storeName}! Quero fazer este pedido pelo plano Grátis da Vitrine.`,
+      `Produto: ${product.name}${variantLabel}`,
+      `Quantidade: ${quantity}`,
+      `Valor dos produtos: ${formatPrice(unitPrice * quantity)} (frete a combinar)`,
+      `Cliente: ${fields.get("recipient")}`,
+      `Telefone: ${fields.get("phone")}`,
+      `Endereço para entrega: ${address}`,
+      "Por favor, confirme a disponibilidade, o frete e a forma de pagamento por aqui.",
+    ];
+    const href = `https://wa.me/${product.seller.whatsappPhone.replace(/\D/g, "")}?text=${encodeURIComponent(message.join("\n"))}`;
+    window.open(href, "_blank", "noopener,noreferrer");
+  }
+
   return (
     <div className="page-container product-page">
       <div className="breadcrumbs"><Link to="/">Início</Link><ChevronRight size={14} /><Link to={`/buscar?categoryId=${product.categoryId}`}>{product.category?.name}</Link><ChevronRight size={14} /><span>{product.name}</span></div>
@@ -78,7 +104,24 @@ export function ProductPage() {
           </div>}
           {isFreeStore
             ? whatsappUrl
-              ? <a className="button button-primary full local-whatsapp-cta" href={whatsappUrl} target="_blank" rel="noreferrer"><MessageCircle size={18} /> Pedir pelo WhatsApp</a>
+              ? <>
+                <button className="button button-primary full local-whatsapp-cta" type="button" onClick={() => setShowFreeOrderForm((visible) => !visible)}><MessageCircle size={18} /> {showFreeOrderForm ? "Fechar pedido" : "Pedir pelo WhatsApp"}</button>
+                {showFreeOrderForm && <form className="free-whatsapp-order" onSubmit={sendFreeOrder}>
+                  <h2>Dados do pedido</h2>
+                  <p>O pedido e o endereço serão enviados à loja pelo WhatsApp. Frete e pagamento são combinados diretamente com o vendedor.</p>
+                  {!!product.variants?.length && !selectedVariant && <p className="form-error">Selecione uma variação do produto antes de continuar.</p>}
+                  <div className="quantity-control"><button type="button" disabled={quantity <= 1} onClick={() => setQuantity((value) => Math.max(1, value - 1))}><Minus size={17} /></button><span>{quantity}</span><button type="button" disabled={quantity >= availableStock} onClick={() => setQuantity((value) => Math.min(availableStock, value + 1))}><Plus size={17} /></button></div>
+                  <label>Nome de quem recebe<input name="recipient" required maxLength={120} /></label>
+                  <label>Seu telefone<input name="phone" required type="tel" inputMode="tel" maxLength={20} placeholder="(11) 99999-9999" /></label>
+                  <div className="free-whatsapp-address-row"><label>Rua / avenida<input name="street" required maxLength={160} /></label><label>Número<input name="number" required maxLength={20} /></label></div>
+                  <label>Complemento (opcional)<input name="complement" maxLength={100} /></label>
+                  <label>Bairro<input name="district" required maxLength={100} /></label>
+                  <div className="free-whatsapp-address-row"><label>Cidade<input name="city" required maxLength={100} /></label><label>UF<input name="state" required minLength={2} maxLength={2} /></label></div>
+                  <label>CEP<input name="postalCode" required inputMode="numeric" maxLength={9} placeholder="00000-000" onChange={(event) => { const digits = event.currentTarget.value.replace(/\D/g, "").slice(0, 8); event.currentTarget.value = digits.replace(/^(\d{5})(\d)/, "$1-$2"); }} /></label>
+                  <button className="button button-primary full" type="submit" disabled={availableStock < 1 || quantity > availableStock || (!!product.variants?.length && !selectedVariant)}><MessageCircle size={18} /> Enviar pedido pelo WhatsApp</button>
+                  <small>Esses dados serão compartilhados com a loja pelo WhatsApp para combinar a entrega.</small>
+                </form>}
+              </>
               : <p className="form-error">A loja ainda não configurou o WhatsApp para pedidos.</p>
             : <button className="button button-dark full" disabled={product.stock === 0} onClick={() => requireAuth(() => add.mutate(undefined, { onSuccess: () => navigate("/carrinho") }))}>Comprar agora</button>}
           <div className="purchase-benefits">{isFreeStore ? <><div><MessageCircle /><span><strong>Atendimento local</strong><small>{product.seller?.city}{product.seller?.state ? `/${product.seller.state}` : ""} · combine retirada ou entrega com a loja</small></span></div><div><ShieldCheck /><span><strong>Pedido direto com o lojista</strong><small>Pagamento e entrega combinados pelo WhatsApp</small></span></div></> : <><div><Truck /><span><strong>{isQuickSale ? "Envio pelos Correios" : "Entrega calculada no checkout"}</strong><small>Acompanhe pelo pedido</small></span></div><div><ShieldCheck /><span><strong>Pagamento protegido</strong><small>Ambiente seguro Mercado Pago</small></span></div></>}</div>
