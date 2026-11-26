@@ -20,6 +20,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
   const [selectedSellerPlan, setSelectedSellerPlan] = useState<"FREE" | "PRO">("FREE");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [googleTermsAccepted, setGoogleTermsAccepted] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", password: "", storeName: "", acceptTerms: false });
 
   async function submit(event: FormEvent) {
@@ -48,13 +49,17 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
   }
 
   async function loginWithGoogle(credential: string) {
+    if (!googleTermsAccepted) {
+      setError("Aceite os termos e a política de privacidade para continuar com o Google.");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
       const response = await api<AuthResponse>("/auth/google", {
         method: "POST",
         auth: false,
-        body: JSON.stringify({ credential }),
+        body: JSON.stringify({ credential, acceptTerms: true }),
       });
       setSession(response);
       const target = (location.state as { from?: string } | null)?.from;
@@ -122,6 +127,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
           {mode === "login" && googleClientId && (
             <>
               <div className="auth-divider"><span>ou</span></div>
+              <label className="auth-terms"><input type="checkbox" checked={googleTermsAccepted} onChange={(event) => setGoogleTermsAccepted(event.target.checked)} /><span>Ao continuar, aceito os termos de uso e a política de privacidade.</span></label>
               <div className="google-login">
                 <GoogleLogin
                   onSuccess={(response) => { if (response.credential) void loginWithGoogle(response.credential); }}
@@ -132,6 +138,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
               </div>
             </>
           )}
+          {mode === "login" && <p className="auth-switch"><Link to="/recuperar-senha">Esqueci minha senha</Link></p>}
         </form>
       </section>
     </div>

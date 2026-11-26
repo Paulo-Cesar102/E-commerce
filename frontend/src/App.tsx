@@ -18,13 +18,17 @@ import { FavoritesPage } from "./pages/FavoritesPage";
 import { NotificationsPage } from "./pages/NotificationsPage";
 import { AdminPage } from "./pages/AdminPage";
 import { QuickSalePage } from "./pages/QuickSalePage";
+import { PasswordRecoveryPage } from "./pages/PasswordRecoveryPage";
+import { PrivacyPage } from "./pages/PrivacyPage";
 
 const ChatPage = lazy(() => import("./pages/ChatPage").then((module) => ({ default: module.ChatPage })));
 const DashboardPage = lazy(() => import("./pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
 
 function Protected({ children, seller = false, admin = false }: { children: ReactNode; seller?: boolean; admin?: boolean }) {
   const user = useAuthStore((state) => state.user);
+  const initialized = useAuthStore((state) => state.initialized);
   const location = useLocation();
+  if (!initialized) return <Loader label="Verificando sua sessão" />;
   if (!user) return <Navigate to="/entrar" state={{ from: location.pathname }} replace />;
   if (seller && user.role === "CUSTOMER") return <Navigate to="/" replace />;
   if (admin && user.role !== "ADMIN") return <Navigate to="/" replace />;
@@ -43,9 +47,11 @@ export default function App() {
         <Route path="/carrinho" element={<Protected><CartPage /></Protected>} />
         <Route path="/entrar" element={<AuthPage mode="login" />} />
         <Route path="/criar-conta" element={<AuthPage mode="register" />} />
+        <Route path="/recuperar-senha" element={<PasswordRecoveryPage />} />
         <Route path="/pedidos" element={<Protected><OrdersPage /></Protected>} />
         <Route path="/anunciar" element={<Protected><QuickSalePage /></Protected>} />
         <Route path="/enderecos" element={<Protected><AddressesPage /></Protected>} />
+        <Route path="/conta/privacidade" element={<Protected><PrivacyPage /></Protected>} />
         <Route path="/favoritos" element={<Protected><FavoritesPage /></Protected>} />
         <Route path="/notificacoes" element={<Protected><NotificationsPage /></Protected>} />
         <Route path="/admin" element={<Protected admin><AdminPage /></Protected>} />

@@ -16,6 +16,7 @@ export const loginSchema = z.object({
 
 export const googleLoginSchema = z.object({
   credential: z.string().min(1),
+  acceptTerms: z.literal(true),
 });
 
 export const refreshSchema = z.object({ refreshToken: z.string().min(20).optional() });

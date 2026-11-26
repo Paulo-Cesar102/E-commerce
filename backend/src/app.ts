@@ -18,11 +18,13 @@ import { adminRoutes } from "./routes/admin.routes.js";
 import { sellerPlanRoutes } from "./routes/sellerPlan.routes.js";
 import { quickSaleRoutes } from "./routes/quickSale.routes.js";
 import { uploadsDirectory } from "./middlewares/upload.js";
+import { privateKycDirectory } from "./middlewares/kycUpload.js";
 import fs from "node:fs";
 
 export const app = express();
 if (env.TRUST_PROXY) app.set("trust proxy", 1);
 fs.mkdirSync(uploadsDirectory, { recursive: true });
+fs.mkdirSync(privateKycDirectory, { recursive: true });
 
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));

@@ -11,10 +11,11 @@ export class AuthRepository {
     return prisma.user.findUnique({ where: { email } });
   }
 
-  createUser(data: RegisterData) {
-    return prisma.user.create({
-      data,
-      select: { id: true, name: true, email: true, role: true },
+  createUser(data: RegisterData, consent?: { type: string; version: string }) {
+    return prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({ data, select: { id: true, name: true, email: true, role: true } });
+      if (consent) await tx.userConsent.create({ data: { userId: user.id, ...consent } });
+      return user;
     });
   }
 
@@ -46,6 +47,13 @@ export class AuthRepository {
   findPasswordResetToken(tokenHash: string) { return prisma.passwordResetToken.findUnique({ where: { tokenHash }, include: { user: true } }); }
   consumePasswordResetToken(id: string) { return prisma.passwordResetToken.update({ where: { id }, data: { usedAt: new Date() } }); }
   updatePassword(userId: string, password: string) { return prisma.user.update({ where: { id: userId }, data: { password } }); }
+  completePasswordReset(id: string, userId: string, password: string) {
+    return prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: userId }, data: { password } });
+      await tx.passwordResetToken.update({ where: { id }, data: { usedAt: new Date() } });
+      await tx.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
+    });
+  }
   markEmailVerified(userId: string) { return prisma.user.update({ where: { id: userId }, data: { emailVerifiedAt: new Date() } }); }
   createEmailVerificationToken(data: { userId: string; tokenHash: string; expiresAt: Date }) { return prisma.emailVerificationToken.create({ data }); }
   findEmailVerificationToken(tokenHash: string) { return prisma.emailVerificationToken.findUnique({ where: { tokenHash }, include: { user: true } }); }
