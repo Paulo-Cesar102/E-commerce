@@ -1,8 +1,12 @@
 import { AppError } from "../errors/AppError.js";
 import { CartRepository } from "../repository/CartRepository.js";
+import { SellerPlanService } from "./SellerPlanService.js";
 
 export class CartService {
-  constructor(private readonly cartRepository = new CartRepository()) {}
+  constructor(
+    private readonly cartRepository = new CartRepository(),
+    private readonly sellerPlans = new SellerPlanService(),
+  ) {}
 
   async get(userId: string) {
     const cart = await this.getOrCreateCart(userId);
@@ -14,6 +18,12 @@ export class CartService {
     const variant = variantId ? await this.cartRepository.findActiveVariant(productId, variantId) : null;
     if (!product || (variantId && (!variant || variant.stock < quantity)) || (!variantId && product.stock < quantity)) {
       throw new AppError(400, "Produto indisponivel");
+    }
+    if (product.listingType === "QUICK_SALE" && product.ownerUserId === userId) {
+      throw new AppError(403, "Voce nao pode comprar o proprio anuncio");
+    }
+    if (product.listingType === "STORE" && (!product.sellerId || !(await this.sellerPlans.isProSeller(product.sellerId)))) {
+      throw new AppError(403, "Este produto recebe pedidos locais pelo WhatsApp e nao pode ser adicionado ao carrinho.");
     }
 
     const cart = await this.getOrCreateCart(userId);

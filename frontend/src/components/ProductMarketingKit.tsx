@@ -8,6 +8,8 @@ export function ProductMarketingKit({ product, image }: { product: Product; imag
   const [copied, setCopied] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const link = createProductShareLink(product.id, product.seller?.id);
+  const displayName = product.seller?.storeName ?? product.ownerUser?.name ?? "Sua loja";
+  const isQuickSale = product.listingType === "QUICK_SALE";
 
   async function copyLink() {
     await navigator.clipboard.writeText(link);
@@ -18,14 +20,14 @@ export function ProductMarketingKit({ product, image }: { product: Product; imag
   async function generateStory() {
     setIsGenerating(true);
     try {
-      await downloadProductStory({ title: product.name, price: formatPrice(product.price), imageUrl: image, storeName: product.seller?.storeName, productId: product.id });
+      await downloadProductStory({ title: product.name, price: formatPrice(product.price), imageUrl: image, storeName: displayName, productId: product.id });
     } finally {
       setIsGenerating(false);
     }
   }
 
   return <section className="marketing-kit" aria-labelledby="marketing-kit-title">
-    <div className="marketing-store"><span className="marketing-store-avatar">{(product.seller?.storeName ?? "S").slice(0, 1).toUpperCase()}</span><span><small>Divulgação da loja</small><strong>{product.seller?.storeName ?? "Sua loja"}</strong></span><Store size={18} /></div>
+    <div className="marketing-store"><span className="marketing-store-avatar">{displayName.slice(0, 1).toUpperCase()}</span><span><small>{isQuickSale ? "Divulgação do anúncio" : "Divulgação da loja"}</small><strong>{displayName}</strong></span><Store size={18} /></div>
     <div className="marketing-kit-heading"><span className="marketing-kit-icon"><Megaphone size={20} /></span><div><h2 id="marketing-kit-title">Kit de divulgação</h2><p>Crie um Story pronto e compartilhe o produto com rastreio.</p></div></div>
     <label className="marketing-link-label" htmlFor="product-share-link">Link rastreável do produto</label>
     <div className="marketing-link-row"><input id="product-share-link" readOnly value={link} /><button className="icon-button bordered" onClick={copyLink} title="Copiar link" aria-label="Copiar link">{copied ? <Check size={18} /> : <Copy size={18} />}</button></div>

@@ -1,4 +1,4 @@
-import { Heart, ShoppingBag, Star } from "lucide-react";
+import { Heart, MessageCircle, ShoppingBag, Star } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
@@ -11,6 +11,11 @@ export function ProductCard({ product }: { product: Product }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const accessToken = useAuthStore((state) => state.accessToken);
+  const isQuickSale = product.listingType === "QUICK_SALE";
+  const isFreeStore = !isQuickSale && product.seller?.plan === "FREE";
+  const whatsappUrl = product.seller?.whatsappPhone
+    ? `https://wa.me/${product.seller.whatsappPhone.replace(/\D/g, "")}?text=${encodeURIComponent(`Olá! Tenho interesse em ${product.name}.`)}`
+    : null;
   const rating = product.averageRating !== undefined
     ? Number(product.averageRating)
     : product.reviews?.length
@@ -45,10 +50,12 @@ export function ProductCard({ product }: { product: Product }) {
           <small>({product.ratingCount ?? product.reviews?.length ?? 0})</small>
         </div>
         <div className="product-card-footer">
-          <div><strong>{formatPrice(product.price)}</strong><small>em até 10x</small></div>
-          <button className="add-cart-icon" onClick={addToCart} disabled={add.isPending || product.stock === 0} aria-label="Adicionar ao carrinho">
-            <ShoppingBag size={18} />
-          </button>
+          <div><strong>{formatPrice(product.price)}</strong><small>{isQuickSale ? `Venda rápida · ${product.ownerUser?.name ?? "item independente"}` : isFreeStore ? `${product.seller?.city ?? "Local"} · pedido local` : "em até 10x"}</small></div>
+          {isFreeStore
+            ? whatsappUrl
+              ? <a className="add-cart-icon" href={whatsappUrl} target="_blank" rel="noreferrer" aria-label="Pedir pelo WhatsApp"><MessageCircle size={18} /></a>
+              : <Link className="add-cart-icon" to={`/produto/${product.id}`} aria-label="Ver produto"><ShoppingBag size={18} /></Link>
+            : <button className="add-cart-icon" onClick={addToCart} disabled={add.isPending || product.stock === 0} aria-label="Adicionar ao carrinho"><ShoppingBag size={18} /></button>}
         </div>
       </div>
     </article>

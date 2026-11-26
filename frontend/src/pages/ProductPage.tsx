@@ -49,6 +49,11 @@ export function ProductPage() {
   const optionAvailable = (type: string, value: string) => !product.variants?.length || product.variants.some((variant) => variant.active && variant.stock > 0 && variant.attributes[type] === value && Object.entries(selectedOptions).every(([selectedType, selectedValue]) => selectedType === type || variant.attributes[selectedType] === selectedValue));
   const images = product.images.length ? product.images : [{ url: productFallbackImage, alt: product.name }];
   const rating = product.reviews?.length ? product.reviews.reduce((sum, review) => sum + review.rating, 0) / product.reviews.length : 0;
+  const isQuickSale = product.listingType === "QUICK_SALE";
+  const isFreeStore = !isQuickSale && product.seller?.plan === "FREE";
+  const whatsappUrl = product.seller?.whatsappPhone
+    ? `https://wa.me/${product.seller.whatsappPhone.replace(/\D/g, "")}?text=${encodeURIComponent(`Olá! Tenho interesse em ${quantity} unidade(s) de ${product.name}${selectedVariant ? ` (${selectedVariant.sku})` : ""}.`)}`
+    : null;
 
   return (
     <div className="page-container product-page">
@@ -63,18 +68,23 @@ export function ProductPage() {
           <h1>{product.name}</h1>
           <div className="detail-rating"><span><Star size={17} fill="currentColor" /> {rating ? rating.toFixed(1) : "Novo"}</span><a href="#avaliacoes">{product.reviews?.length ?? 0} avaliações</a><span>{product.stock > 0 ? "Em estoque" : "Indisponível"}</span></div>
           <p className="product-description">{product.description}</p>
-          <div className="detail-price"><strong>{formatPrice(selectedVariant?.price ?? product.price)}</strong><span>ou 10x de {formatPrice(Number(selectedVariant?.price ?? product.price) / 10)} sem juros</span></div>
+          <div className="detail-price"><strong>{formatPrice(selectedVariant?.price ?? product.price)}</strong>{!isFreeStore && <span>ou 10x de {formatPrice(Number(selectedVariant?.price ?? product.price) / 10)} sem juros</span>}</div>
           {Object.entries(groupedOptions).map(([type, values]) => <div className="option-group" key={type}><label>{type === "size" ? "Tamanho" : type === "color" ? "Cor" : "Sabor"}</label><div>{values.map((value) => <button disabled={!optionAvailable(type, value)} className={selectedOptions[type] === value ? "active" : ""} onClick={() => setSelectedOptions((current) => ({ ...current, [type]: value }))} key={value}>{value}</button>)}</div></div>)}
           {selectedVariant && <small>SKU: {selectedVariant.sku} · {selectedVariant.stock} unidades disponíveis</small>}
-          <div className="buy-row">
+          {!isFreeStore && <div className="buy-row">
             <div className="quantity-control"><button onClick={() => setQuantity(Math.max(1, quantity - 1))}><Minus size={17} /></button><span>{quantity}</span><button onClick={() => setQuantity(Math.min(availableStock, quantity + 1))}><Plus size={17} /></button></div>
             <button className="button button-primary grow" disabled={availableStock === 0 || (!!product.variants?.length && !selectedVariant) || add.isPending} onClick={() => requireAuth(() => add.mutate())}><ShoppingBag size={19} /> {add.isSuccess ? "Adicionado" : "Adicionar ao carrinho"}</button>
             <button className="icon-button bordered" aria-label="Favoritar" disabled={favorite.isPending} onClick={() => requireAuth(() => favorite.mutate())}><Heart size={20} fill={favorite.isSuccess ? "currentColor" : "none"} /></button>
-          </div>
-          <button className="button button-dark full" disabled={product.stock === 0} onClick={() => requireAuth(() => add.mutate(undefined, { onSuccess: () => navigate("/carrinho") }))}>Comprar agora</button>
-          <div className="purchase-benefits"><div><Truck /><span><strong>Entrega calculada no checkout</strong><small>Acompanhe pelo pedido</small></span></div><div><ShieldCheck /><span><strong>Pagamento protegido</strong><small>Ambiente seguro Mercado Pago</small></span></div></div>
+          </div>}
+          {isFreeStore
+            ? whatsappUrl
+              ? <a className="button button-primary full local-whatsapp-cta" href={whatsappUrl} target="_blank" rel="noreferrer"><MessageCircle size={18} /> Pedir pelo WhatsApp</a>
+              : <p className="form-error">A loja ainda não configurou o WhatsApp para pedidos.</p>
+            : <button className="button button-dark full" disabled={product.stock === 0} onClick={() => requireAuth(() => add.mutate(undefined, { onSuccess: () => navigate("/carrinho") }))}>Comprar agora</button>}
+          <div className="purchase-benefits">{isFreeStore ? <><div><MessageCircle /><span><strong>Atendimento local</strong><small>{product.seller?.city}{product.seller?.state ? `/${product.seller.state}` : ""} · combine retirada ou entrega com a loja</small></span></div><div><ShieldCheck /><span><strong>Pedido direto com o lojista</strong><small>Pagamento e entrega combinados pelo WhatsApp</small></span></div></> : <><div><Truck /><span><strong>{isQuickSale ? "Envio pelos Correios" : "Entrega calculada no checkout"}</strong><small>Acompanhe pelo pedido</small></span></div><div><ShieldCheck /><span><strong>Pagamento protegido</strong><small>Ambiente seguro Mercado Pago</small></span></div></>}</div>
           <ProductMarketingKit product={product} image={imageUrl(images[activeImage]?.url)} />
           {product.seller && <div className="seller-summary"><Link to={`/loja/${product.seller.id}`}><span className="store-avatar">{product.seller.storeName[0]}</span><span><small>Vendido por</small><strong>{product.seller.storeName}</strong><em>Visitar loja</em></span></Link><button onClick={() => requireAuth(async () => { await api("/chats", { method: "POST", body: JSON.stringify({ sellerId: product.seller!.id }) }); navigate("/chat"); })}><MessageCircle size={17} /> Falar com a loja</button></div>}
+          {isQuickSale && product.ownerUser && <div className="seller-summary"><div><span className="store-avatar">{product.ownerUser.name[0]}</span><span><small>Anúncio de venda rápida</small><strong>{product.ownerUser.name}</strong><em>Vendedor independente · produto enviado pelos Correios</em></span></div></div>}
         </div>
       </section>
       <section id="avaliacoes" className="reviews-section">

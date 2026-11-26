@@ -1,11 +1,14 @@
 import { AppError } from "../errors/AppError.js";
 import { ProductRepository } from "../repository/ProductRepository.js";
 import { FileStorageService } from "./FileStorageService.js";
+import { SellerPlanService } from "./SellerPlanService.js";
 
 type ProductQuery = {
   q?: string;
   categoryId?: string;
   sellerId?: string;
+  city?: string;
+  state?: string;
   sort: "rating" | "new" | "price_asc" | "price_desc";
   page: number;
   limit: number;
@@ -26,14 +29,39 @@ export class ProductService {
   constructor(
     private readonly productRepository = new ProductRepository(),
     private readonly fileStorage = new FileStorageService(),
+    private readonly sellerPlans = new SellerPlanService(),
   ) {}
 
-  async list({ q, categoryId, sellerId, sort, page, limit }: ProductQuery) {
+  async list({ q, categoryId, sellerId, city, state, sort, page, limit }: ProductQuery) {
+    const now = new Date();
+    const proSeller = {
+      seller: {
+        is: {
+          plan: "PRO" as const,
+          OR: [{ planExpiresAt: null }, { planExpiresAt: { gt: now } }],
+        },
+      },
+    };
+    const localFreeSeller = city && state
+      ? {
+          seller: {
+            is: {
+              plan: "FREE" as const,
+              city: { equals: city, mode: "insensitive" as const },
+              state: { equals: state, mode: "insensitive" as const },
+            },
+          },
+        }
+      : null;
+    const quickSaleListing = { listingType: "QUICK_SALE" as const, stock: { gt: 0 } };
     const where = {
       status: "ACTIVE" as const,
       ...(categoryId ? { categoryId } : {}),
-      ...(sellerId ? { sellerId } : {}),
+      ...(sellerId ? { sellerId, listingType: "STORE" as const } : {}),
       ...(q ? { name: { contains: q, mode: "insensitive" as const } } : {}),
+      ...(sellerId
+        ? {}
+        : { OR: localFreeSeller ? [proSeller, localFreeSeller, quickSaleListing] : [proSeller, quickSaleListing] }),
     };
     const orderBy =
       sort === "new"
@@ -46,7 +74,7 @@ export class ProductService {
 
     const { items, total } = await this.productRepository.list(where, orderBy, page, limit);
 
-    return { items, total, page, limit };
+    return { items: items.map((item) => this.withEffectivePlan(item)), total, page, limit };
   }
 
   async findById(id: string) {
@@ -56,9 +84,19 @@ export class ProductService {
       throw new AppError(404, "Produto nao encontrado");
     }
 
-    const related = await this.productRepository.findRelated(product.id, product.categoryId);
+    const related = product.seller
+      ? await this.productRepository.findRelated(
+          product.id,
+          product.categoryId,
+          !this.isPro(product.seller.plan, product.seller.planExpiresAt) ? product.seller.city ?? undefined : undefined,
+          !this.isPro(product.seller.plan, product.seller.planExpiresAt) ? product.seller.state ?? undefined : undefined,
+        )
+      : [];
 
-    return { product, related };
+    return {
+      product: this.withEffectivePlan(product),
+      related: related.map((item) => this.withEffectivePlan(item)),
+    };
   }
 
   async categories() {
@@ -73,12 +111,28 @@ export class ProductService {
     }
 
     const categories = await this.productRepository.findStoreCategories(sellerId);
-
-    return { ...seller, categories };
+    const plan = this.isPro(seller.plan, seller.planExpiresAt) ? "PRO" : "FREE";
+    return {
+      ...seller,
+      plan,
+      products: seller.products.map((product) => ({
+        ...product,
+        seller: {
+          id: seller.id,
+          storeName: seller.storeName,
+          plan,
+          city: seller.city,
+          state: seller.state,
+          whatsappPhone: seller.whatsappPhone,
+        },
+      })),
+      categories,
+    };
   }
 
   async create(userId: string, input: ProductInput) {
     const seller = await this.getSeller(userId);
+    await this.sellerPlans.assertCanCreateProduct(seller.id);
     await this.ensureCategory(input.categoryId);
 
     try {
@@ -94,6 +148,10 @@ export class ProductService {
     const product = await this.productRepository.findSellerProduct(productId, seller.id);
     if (!product) {
       throw new AppError(404, "Produto nao encontrado");
+    }
+
+    if (product.status === "INACTIVE" && input.status === "ACTIVE") {
+      await this.sellerPlans.assertCanCreateProduct(seller.id);
     }
 
     if (input.categoryId) {
@@ -185,5 +243,21 @@ export class ProductService {
     if (!category) {
       throw new AppError(400, "Categoria invalida");
     }
+  }
+
+  private isPro(plan: string, expiresAt: Date | null) {
+    return plan === "PRO" && (!expiresAt || expiresAt > new Date());
+  }
+
+  private withEffectivePlan<T extends { seller?: { plan: string; planExpiresAt: Date | null } | null }>(item: T) {
+    if (!item.seller) return item;
+    return {
+      ...item,
+      seller: {
+        ...item.seller,
+        plan: this.isPro(item.seller.plan, item.seller.planExpiresAt) ? "PRO" : "FREE",
+        planExpiresAt: undefined,
+      },
+    };
   }
 }

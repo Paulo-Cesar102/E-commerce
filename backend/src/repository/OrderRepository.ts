@@ -7,7 +7,14 @@ export class OrderRepository {
   listMine(userId: string) {
     return prisma.order.findMany({
       where: { customerId: userId },
-      include: { items: { include: { product: { include: { images: { take: 1 } } }, variant: true } }, payment: true, shipment: true, events: { orderBy: { createdAt: "desc" } } },
+      include: {
+        items: { include: { product: { include: { images: { take: 1 } } }, variant: true } },
+        payment: true,
+        shipment: true,
+        seller: { select: { id: true, storeName: true } },
+        events: { orderBy: { createdAt: "desc" } },
+        directSeller: { select: { id: true, name: true } },
+      },
       orderBy: { createdAt: "desc" },
     });
   }
@@ -21,7 +28,16 @@ export class OrderRepository {
             selected: true,
             ...(itemIds ? { id: { in: itemIds } } : {}),
           },
-          include: { product: { include: { seller: true, images: { take: 1, orderBy: { position: "asc" } } } }, variant: true },
+          include: {
+            product: {
+              include: {
+                seller: true,
+                ownerUser: { select: { id: true } },
+                images: { take: 1, orderBy: { position: "asc" } },
+              },
+            },
+            variant: true,
+          },
         },
       },
     });
@@ -68,7 +84,8 @@ export class OrderRepository {
     input: {
       checkoutId: string;
       customerId: string;
-      sellerId: string;
+      sellerId?: string;
+      directSellerUserId?: string;
       subtotal: number;
       shippingCost: number;
       discount: number;
@@ -78,6 +95,7 @@ export class OrderRepository {
       shippingAddress: object;
       shipment: { provider: string; service: string; quotedDays: number; rawPayload?: object };
       deliveryEstimateDate: Date;
+      quickSalePayout?: boolean;
       items: { productId: string; variantId?: string | null; quantity: number; unitPrice: Prisma.Decimal | string | number; productName: string; productSku?: string; imageUrl?: string }[];
     },
   ) {
@@ -85,8 +103,10 @@ export class OrderRepository {
       data: {
         checkoutId: input.checkoutId,
         customerId: input.customerId,
-        sellerId: input.sellerId,
+        ...(input.sellerId ? { sellerId: input.sellerId } : {}),
+        ...(input.directSellerUserId ? { directSellerUserId: input.directSellerUserId } : {}),
         subtotal: input.subtotal, shippingCost: input.shippingCost, discount: input.discount, platformFee: input.platformFee, total: input.total,
+        ...(input.quickSalePayout ? { quickSalePayoutStatus: "PENDING" as const } : {}),
         shippingMethod: input.shippingMethod, shippingAddress: input.shippingAddress,
         deliveryEstimateDate: input.deliveryEstimateDate,
         items: {
@@ -112,11 +132,16 @@ export class OrderRepository {
     return tx.cartItem.deleteMany({ where: { id: { in: itemIds } } });
   }
 
-  cancelOrders(tx: PrismaTransaction, orderIds: string[]) {
-    return tx.order.updateMany({
+  async cancelOrders(tx: PrismaTransaction, orderIds: string[]) {
+    const result = await tx.order.updateMany({
       where: { id: { in: orderIds }, status: "PENDING_PAYMENT" },
       data: { status: "CANCELED" },
     });
+    await tx.order.updateMany({
+      where: { id: { in: orderIds }, directSellerUserId: { not: null }, quickSalePayoutStatus: "PENDING" },
+      data: { quickSalePayoutStatus: "VOIDED" },
+    });
+    return result;
   }
 
   updateOrderPayment(orderId: string, input: { mercadoPagoPreference: string | null; providerRef: string }) {
@@ -186,6 +211,7 @@ export class OrderRepository {
       paymentStatus: "APPROVED" | "REJECTED" | "CANCELED" | "REFUNDED";
       providerRef?: string;
       rawPayload?: unknown;
+      quickSalePayoutStatus?: "VOIDED";
     },
   ) {
     const paymentUpdate = {
@@ -199,6 +225,7 @@ export class OrderRepository {
       data: {
         status: input.orderStatus,
         payment: { update: paymentUpdate },
+        ...(input.quickSalePayoutStatus ? { quickSalePayoutStatus: input.quickSalePayoutStatus } : {}),
       },
       include: { payment: true, items: true },
     });
@@ -248,5 +275,25 @@ export class OrderRepository {
 
   findOrderItems(orderId: string) {
     return prisma.order.findUnique({ where: { id: orderId }, include: { items: true } });
+  }
+
+  async markQuickSaleProductsSold(tx: PrismaTransaction, orderId: string) {
+    const items = await tx.orderItem.findMany({
+      where: { orderId, product: { listingType: "QUICK_SALE" } },
+      select: { productId: true },
+    });
+    if (items.length) {
+      await tx.product.updateMany({
+        where: { id: { in: items.map((item) => item.productId) }, listingType: "QUICK_SALE" },
+        data: { status: "INACTIVE", stock: 0 },
+      });
+    }
+  }
+
+  voidQuickSalePayout(tx: PrismaTransaction, orderId: string) {
+    return tx.order.updateMany({
+      where: { id: orderId, quickSalePayoutStatus: "PENDING" },
+      data: { quickSalePayoutStatus: "VOIDED" },
+    });
   }
 }

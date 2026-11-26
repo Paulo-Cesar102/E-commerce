@@ -15,6 +15,8 @@ const envSchema = z.object({
   COOKIE_SECURE: z.coerce.boolean().default(false),
   MERCADO_PAGO_ACCESS_TOKEN: z.string().optional(),
   MERCADO_PAGO_WEBHOOK_SECRET: z.string().optional(),
+  PRO_MONTHLY_PRICE: z.coerce.number().positive().default(25),
+  FRONTEND_URL: z.url().optional(),
   CORREIOS_QUOTE_URL: z.url().optional(),
   CORREIOS_API_TOKEN: z.string().optional(),
   CHECKOUT_HOLD_MINUTES: z.coerce.number().int().min(5).max(120).default(30),

@@ -31,10 +31,22 @@ export type Product = {
   averageRating?: string | number;
   ratingCount?: number;
   status?: "ACTIVE" | "INACTIVE";
+  listingType?: "STORE" | "QUICK_SALE";
+  originPostalCode?: string | null;
   categoryId: string;
-  sellerId: string;
+  sellerId: string | null;
   category?: Category;
-  seller?: { id: string; storeName: string; description?: string; userId?: string };
+  seller?: {
+    id: string;
+    storeName: string;
+    description?: string;
+    userId?: string;
+    plan?: "FREE" | "PRO";
+    city?: string | null;
+    state?: string | null;
+    whatsappPhone?: string | null;
+  } | null;
+  ownerUser?: { id: string; name: string } | null;
   images: ProductImage[];
   options?: { id: string; type: string; value: string }[];
   variants?: { id: string; sku: string; attributes: Record<string, string>; price?: string | number; stock: number; active: boolean }[];
@@ -83,6 +95,8 @@ export type Order = {
   status: OrderStatus;
   deliveryEstimateDate?: string;
   correiosTrackingCode?: string;
+  platformFee?: string | number;
+  quickSalePayoutStatus?: "NOT_APPLICABLE" | "PENDING" | "PAID" | "VOIDED";
   shipment?: { provider: string; service: string; status: string; trackingCode?: string; quotedDays?: number };
   mercadoPagoPreference?: string;
   createdAt: string;
@@ -96,6 +110,8 @@ export type Order = {
     product?: Product;
   }>;
   customer?: Pick<User, "id" | "name" | "email">;
+  seller?: { id: string; storeName: string } | null;
+  directSeller?: Pick<User, "id" | "name"> | null;
 };
 
 export type ChatMessage = {

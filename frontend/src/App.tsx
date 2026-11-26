@@ -17,6 +17,7 @@ import { AddressesPage } from "./pages/AddressesPage";
 import { FavoritesPage } from "./pages/FavoritesPage";
 import { NotificationsPage } from "./pages/NotificationsPage";
 import { AdminPage } from "./pages/AdminPage";
+import { QuickSalePage } from "./pages/QuickSalePage";
 
 const ChatPage = lazy(() => import("./pages/ChatPage").then((module) => ({ default: module.ChatPage })));
 const DashboardPage = lazy(() => import("./pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
@@ -43,6 +44,7 @@ export default function App() {
         <Route path="/entrar" element={<AuthPage mode="login" />} />
         <Route path="/criar-conta" element={<AuthPage mode="register" />} />
         <Route path="/pedidos" element={<Protected><OrdersPage /></Protected>} />
+        <Route path="/anunciar" element={<Protected><QuickSalePage /></Protected>} />
         <Route path="/enderecos" element={<Protected><AddressesPage /></Protected>} />
         <Route path="/favoritos" element={<Protected><FavoritesPage /></Protected>} />
         <Route path="/notificacoes" element={<Protected><NotificationsPage /></Protected>} />

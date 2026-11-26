@@ -1,8 +1,12 @@
 import { AppError } from "../errors/AppError.js";
 import { SellerDashboardRepository } from "../repository/SellerDashboardRepository.js";
+import { SellerPlanService } from "./SellerPlanService.js";
 
 export class SellerDashboardService {
-  constructor(private readonly sellerDashboardRepository = new SellerDashboardRepository()) {}
+  constructor(
+    private readonly sellerDashboardRepository = new SellerDashboardRepository(),
+    private readonly sellerPlans = new SellerPlanService(),
+  ) {}
 
   async summary(userId: string) {
     const seller = await this.sellerDashboardRepository.findSellerByUserId(userId);
@@ -24,6 +28,7 @@ export class SellerDashboardService {
 
     return {
       seller,
+      plan: await this.sellerPlans.getPlan(userId),
       totalSales,
       revenue,
       profit: revenue,
@@ -35,7 +40,7 @@ export class SellerDashboardService {
     };
   }
 
-  async updateSettings(userId: string, input: { storeName: string; description?: string; postalCode: string }) {
+  async updateSettings(userId: string, input: { storeName: string; description?: string; postalCode: string; whatsappPhone: string; city: string; state: string }) {
     const seller = await this.sellerDashboardRepository.findSellerByUserId(userId);
     if (!seller) {
       throw new AppError(403, "Vendedor nao encontrado");

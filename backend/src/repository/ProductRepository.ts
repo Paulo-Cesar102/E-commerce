@@ -24,6 +24,8 @@ export class ProductRepository {
           category: true,
           images: { orderBy: { position: "asc" } },
           reviews: { select: { rating: true } },
+          seller: { select: { id: true, storeName: true, plan: true, planExpiresAt: true, city: true, state: true, whatsappPhone: true } },
+          ownerUser: { select: { id: true, name: true } },
         },
         orderBy,
         skip: (page - 1) * limit,
@@ -40,7 +42,8 @@ export class ProductRepository {
       where: { id, status: "ACTIVE" },
       include: {
         category: true,
-        seller: true,
+        seller: { select: { id: true, storeName: true, description: true, plan: true, planExpiresAt: true, city: true, state: true, whatsappPhone: true } },
+        ownerUser: { select: { id: true, name: true } },
         images: { orderBy: { position: "asc" } },
         options: true,
         variants: { where: { active: true } },
@@ -49,16 +52,31 @@ export class ProductRepository {
     });
   }
 
-  findRelated(productId: string, categoryId: string) {
+  findRelated(productId: string, categoryId: string, city?: string, state?: string) {
+    const now = new Date();
     return prisma.product.findMany({
       where: {
         id: { not: productId },
         categoryId,
         status: "ACTIVE",
+        listingType: "STORE",
+        seller: {
+          is: {
+            OR: [
+              { plan: "PRO", OR: [{ planExpiresAt: null }, { planExpiresAt: { gt: now } }] },
+              ...(city && state ? [{
+                plan: "FREE" as const,
+                city: { equals: city, mode: "insensitive" as const },
+                state: { equals: state, mode: "insensitive" as const },
+              }] : []),
+            ],
+          },
+        },
       },
       include: {
         category: true,
-        seller: true,
+        seller: { select: { id: true, storeName: true, plan: true, planExpiresAt: true, city: true, state: true, whatsappPhone: true } },
+        ownerUser: { select: { id: true, name: true } },
         reviews: { select: { rating: true } },
         images: { take: 1, orderBy: { position: "asc" } },
       },
@@ -85,9 +103,17 @@ export class ProductRepository {
   findStore(sellerId: string) {
     return prisma.sellerProfile.findUnique({
       where: { id: sellerId },
-      include: {
+      select: {
+        id: true,
+        storeName: true,
+        description: true,
+        plan: true,
+        planExpiresAt: true,
+        city: true,
+        state: true,
+        whatsappPhone: true,
         products: {
-          where: { status: "ACTIVE" },
+          where: { status: "ACTIVE", listingType: "STORE" },
           include: {
             category: true,
             images: { orderBy: { position: "asc" } },
@@ -103,11 +129,11 @@ export class ProductRepository {
     return prisma.category.findMany({
       where: {
         active: true,
-        products: { some: { sellerId, status: "ACTIVE" } },
+        products: { some: { sellerId, status: "ACTIVE", listingType: "STORE" } },
       },
       include: {
         _count: {
-          select: { products: { where: { sellerId, status: "ACTIVE" } } },
+        select: { products: { where: { sellerId, status: "ACTIVE", listingType: "STORE" } } },
         },
       },
       orderBy: { name: "asc" },
@@ -125,6 +151,7 @@ export class ProductRepository {
   createProduct(sellerId: string, input: ProductInput) {
     return prisma.product.create({
       data: {
+        listingType: "STORE",
         sellerId,
         categoryId: input.categoryId,
         name: input.name,
@@ -140,7 +167,7 @@ export class ProductRepository {
 
   findSellerProduct(productId: string, sellerId: string) {
     return prisma.product.findFirst({
-      where: { id: productId, sellerId },
+      where: { id: productId, sellerId, listingType: "STORE" },
       include: { images: true },
     });
   }

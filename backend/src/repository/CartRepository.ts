@@ -22,7 +22,10 @@ export class CartRepository {
   }
 
   findActiveProduct(productId: string) {
-    return prisma.product.findFirst({ where: { id: productId, status: "ACTIVE" } });
+    return prisma.product.findFirst({
+      where: { id: productId, status: "ACTIVE" },
+      select: { id: true, sellerId: true, ownerUserId: true, listingType: true, stock: true },
+    });
   }
   findActiveVariant(productId: string, variantId: string) { return prisma.productVariant.findFirst({ where: { id: variantId, productId, active: true } }); }
 

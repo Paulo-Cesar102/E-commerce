@@ -1,16 +1,18 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { ArrowRight, BarChart3, Boxes, Check, CircleDollarSign, Clock3, Edit3, MessageCircle, PackageCheck, Plus, Search, Settings, ShoppingBag, Store, Trash2, UploadCloud, Wallet, X } from "lucide-react";
+import { ArrowRight, BadgeCheck, BarChart3, Boxes, Check, CircleDollarSign, Clock3, Crown, Edit3, MessageCircle, PackageCheck, Plus, Search, Settings, ShoppingBag, Store, Trash2, UploadCloud, Wallet, X } from "lucide-react";
 import clsx from "clsx";
 import { api } from "../lib/api";
 import { formatDate, formatPrice } from "../lib/format";
 import { imageUrl, useFallbackImage } from "../lib/images";
 import type { Category, Order, Product } from "../types";
 import { ErrorState, Loader, StatusBadge } from "../components/UI";
+import { useSearchParams } from "react-router-dom";
 
 type Dashboard = {
-  seller: { id: string; storeName: string; description?: string; postalCode?: string };
+  seller: { id: string; storeName: string; description?: string; postalCode?: string; whatsappPhone?: string | null; city?: string | null; state?: string | null };
+  plan: SellerPlan;
   totalSales: number;
   revenue: number;
   profit: number;
@@ -21,7 +23,21 @@ type Dashboard = {
   finance: { grossSales: string | number; platformFees: string | number; available: string | number; pending: string | number; paidOrders: number; withdrawals: Array<{ id: string; amount: string | number; status: string; requestedAt: string }> };
 };
 
-type Tab = "overview" | "finance" | "products" | "orders" | "settings";
+type SellerPlan = {
+  code: "FREE" | "PRO";
+  status: string;
+  price: number;
+  activeProducts: number;
+  productLimit: number | null;
+  canSellOnline: boolean;
+  canShipNationwide: boolean;
+  whatsappPhone?: string | null;
+  city?: string | null;
+  state?: string | null;
+  expiresAt?: string | null;
+};
+
+type Tab = "overview" | "finance" | "products" | "orders" | "settings" | "plan";
 type DraftProductImage = Product["images"][number] & { file?: File; previewUrl?: string };
 type VariantDraft = { sku: string; size: string; color: string; flavor: string; price: string; stock: string };
 
@@ -32,7 +48,8 @@ function revokeLocalPreviews(images: DraftProductImage[]) {
 }
 
 export function DashboardPage() {
-  const [tab, setTab] = useState<Tab>("overview");
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState<Tab>(() => params.get("tab") === "plan" ? "plan" : "overview");
   const [productModal, setProductModal] = useState<Product | "new" | null>(null);
   const queryClient = useQueryClient();
   const { data, isLoading, error } = useQuery({ queryKey: ["dashboard"], queryFn: () => api<Dashboard>("/seller/dashboard") });
@@ -51,20 +68,22 @@ export function DashboardPage() {
       <div className="dashboard-store"><span><Store size={20} /></span><div><small>Minha loja</small><strong>{data.seller.storeName}</strong></div></div>
       <nav>
         <button className={tab === "overview" ? "active" : ""} onClick={() => setTab("overview")}><BarChart3 /> Visão geral</button>
-        <button className={tab === "finance" ? "active" : ""} onClick={() => setTab("finance")}><Wallet /> Financeiro</button>
+        {(data.plan.canSellOnline || data.finance.paidOrders > 0) && <button className={tab === "finance" ? "active" : ""} onClick={() => setTab("finance")}><Wallet /> Financeiro</button>}
         <button className={tab === "products" ? "active" : ""} onClick={() => setTab("products")}><Boxes /> Produtos</button>
-        <button className={tab === "orders" ? "active" : ""} onClick={() => setTab("orders")}><ShoppingBag /> Pedidos</button>
+        {(data.plan.canSellOnline || data.recentOrders.length > 0) && <button className={tab === "orders" ? "active" : ""} onClick={() => setTab("orders")}><ShoppingBag /> Pedidos</button>}
         <button className={tab === "settings" ? "active" : ""} onClick={() => setTab("settings")}><Settings /> Configurações</button>
+        <button className={tab === "plan" ? "active" : ""} onClick={() => setTab("plan")}><Crown /> Meu plano</button>
       </nav>
       <a href="/chat"><MessageCircle size={18} /> Central de mensagens</a>
     </aside>
     <section className="dashboard-main">
-      <header className="dashboard-top"><div><span className="eyebrow">Painel do vendedor</span><h1>{tab === "overview" ? "Visão geral" : tab === "finance" ? "Financeiro" : tab === "products" ? "Produtos" : tab === "orders" ? "Pedidos" : "Configurações"}</h1></div>{tab === "products" && <div className="dashboard-head-actions"><span className="shared-category-note">Categorias compartilhadas com compradores</span><button className="button button-primary" onClick={() => setProductModal("new")}><Plus size={18} /> Novo produto</button></div>}</header>
+      <header className="dashboard-top"><div><span className="eyebrow">Painel do vendedor</span><h1>{tab === "overview" ? "Visão geral" : tab === "finance" ? "Financeiro" : tab === "products" ? "Produtos" : tab === "orders" ? "Pedidos" : tab === "plan" ? "Meu plano" : "Configurações"}</h1></div>{tab === "products" && <div className="dashboard-head-actions"><span className="shared-category-note">{data.plan.code === "PRO" ? "Produtos ilimitados no Pro" : `${data.plan.activeProducts}/${data.plan.productLimit} produtos ativos no Free`}</span><button className="button button-primary" disabled={data.plan.productLimit !== null && data.plan.activeProducts >= data.plan.productLimit} onClick={() => setProductModal("new")}><Plus size={18} /> Novo produto</button></div>}</header>
       {tab === "overview" && <Overview data={data} onNavigate={setTab} />}
       {tab === "finance" && <SellerFinance finance={data.finance} />}
-      {tab === "products" && <Products data={data} onEdit={setProductModal} />}
+      {tab === "products" && <Products data={data} onEdit={setProductModal} onNavigate={setTab} />}
       {tab === "orders" && <SellerOrders orders={data.recentOrders} />}
       {tab === "settings" && <SettingsView seller={data.seller} />}
+      {tab === "plan" && <PlanView plan={data.plan} onSettings={() => setTab("settings")} />}
     </section>
     {productModal && <ProductModal product={productModal} categories={data.categories} onClose={() => setProductModal(null)} onDone={() => { setProductModal(null); queryClient.invalidateQueries({ queryKey: ["dashboard"] }); }} />}
   </div>;
@@ -75,6 +94,52 @@ function SellerFinance({ finance }: { finance: Dashboard["finance"] }) {
   const [amount, setAmount] = useState("");
   const withdrawal = useMutation({ mutationFn: () => api("/seller/withdrawals", { method: "POST", body: JSON.stringify({ amount: Number(amount.replace(",", ".")) }) }), onSuccess: () => { setAmount(""); queryClient.invalidateQueries({ queryKey: ["dashboard"] }); } });
   return <div className="dashboard-content seller-finance"><div className="metric-grid"><article><span className="metric-icon coral"><Wallet /></span><div><small>Saldo disponível</small><strong>{formatPrice(finance.available)}</strong><span>Somente vendas da sua loja</span></div></article><article><span className="metric-icon yellow"><Clock3 /></span><div><small>Saldo pendente</small><strong>{formatPrice(finance.pending)}</strong><span>Solicitações em análise</span></div></article><article><span className="metric-icon green"><CircleDollarSign /></span><div><small>Vendas aprovadas</small><strong>{formatPrice(finance.grossSales)}</strong><span>{finance.paidOrders} pedidos</span></div></article></div><section className="seller-payout-card"><div><span className="eyebrow">Repasse da sua loja</span><h2>{formatPrice(finance.available)}</h2><p>A comissão da plataforma já foi descontada deste valor.</p></div><form onSubmit={(event) => { event.preventDefault(); withdrawal.mutate(); }}><label>Valor do saque<input required min="0.01" max={Number(finance.available)} step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="R$ 0,00" /></label><button className="button button-primary" disabled={withdrawal.isPending || Number(finance.available) <= 0}><Wallet size={17} /> Solicitar saque</button></form></section><section className="dashboard-table-panel full-panel seller-withdrawals"><header><div><h2>Histórico de saques</h2><p>Acompanhe os repasses solicitados pela sua loja.</p></div><strong>{finance.withdrawals.length}</strong></header>{finance.withdrawals.length ? finance.withdrawals.map((item) => <div className="seller-withdrawal-row" key={item.id}><span><strong>{formatPrice(item.amount)}</strong><small>{new Date(item.requestedAt).toLocaleDateString("pt-BR")}</small></span><span className={`seller-payout-status seller-payout-${item.status.toLowerCase()}`}>{item.status === "REQUESTED" ? "Solicitado" : item.status === "APPROVED" ? "Aprovado" : item.status === "PAID" ? "Pago" : "Rejeitado"}</span></div>) : <div className="table-empty">Nenhum saque solicitado.</div>}</section></div>;
+}
+
+function PlanView({ plan, onSettings }: { plan: SellerPlan; onSettings: () => void }) {
+  const queryClient = useQueryClient();
+  const upgrade = useMutation({
+    mutationFn: () => api<{ checkoutUrl: string }>("/seller/subscription/checkout", { method: "POST" }),
+    onSuccess: ({ checkoutUrl }) => window.location.assign(checkoutUrl),
+  });
+  const cancel = useMutation({
+    mutationFn: () => api("/seller/subscription/cancel", { method: "POST" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+  });
+
+  const statusLabel: Record<string, string> = {
+    NONE: "Plano gratuito",
+    PENDING: "Aguardando confirmação do pagamento",
+    AUTHORIZED: "Assinatura ativa",
+    PAUSED: "Assinatura pausada",
+    CANCELLED: "Cancelamento solicitado",
+    REJECTED: "Pagamento não autorizado",
+  };
+
+  return <div className="dashboard-content plan-page">
+    <section className="plan-current">
+      <div><span className="eyebrow">Seu plano atual</span><h2>{plan.code === "PRO" ? "Vitrine Pro" : "Vitrine Grátis"}</h2><p>{statusLabel[plan.status] ?? statusLabel.NONE}{plan.expiresAt && plan.code === "PRO" ? ` · válido até ${formatDate(plan.expiresAt)}` : ""}</p></div>
+      <span className={`plan-status ${plan.code === "PRO" ? "pro" : ""}`}>{plan.code === "PRO" ? <><BadgeCheck size={17} /> PRO ATIVO</> : "GRÁTIS"}</span>
+    </section>
+    <div className="plan-cards">
+      <article className={`plan-card ${plan.code === "FREE" ? "current" : ""}`}>
+        <span className="plan-card-label">Para começar</span><h3>Grátis</h3><div className="plan-price">R$ 0 <small>/ sempre</small></div>
+        <p>Uma vitrine simples para divulgar sua loja e atender clientes da sua cidade.</p>
+        <ul><li><Check /> Até 10 produtos ativos</li><li><Check /> Link público da sua loja</li><li><Check /> Pedidos locais pelo WhatsApp</li><li><Check /> Painel do vendedor e mensagens</li><li className="muted"><X /> Sem checkout e envio pelo app</li></ul>
+        {plan.code === "FREE" ? <button className="button button-dark full" disabled>Seu plano atual</button> : <button className="button button-dark full" disabled>Plano gratuito disponível</button>}
+      </article>
+      <article className={`plan-card plan-card-pro ${plan.code === "PRO" ? "current" : ""}`}>
+        <span className="plan-card-label"><Crown size={15} /> Para vender mais</span><h3>Pro</h3><div className="plan-price">R$ {plan.price.toFixed(2).replace(".", ",")} <small>/ mês</small></div>
+        <p>Venda pelo app, aceite pagamentos e envie para outras regiões.</p>
+        <ul><li><Check /> Produtos ativos ilimitados</li><li><Check /> Checkout pelo aplicativo</li><li><Check /> Pagamentos integrados ao Mercado Pago</li><li><Check /> Frete e envios pelo app</li><li><Check /> Painel financeiro e gerenciamento de pedidos</li><li><Check /> Tudo que já existe no plano Grátis</li></ul>
+        {plan.code === "PRO" ? <button className="button button-dark full" disabled>Plano ativo</button> : <button className="button button-primary full" onClick={() => upgrade.mutate()} disabled={upgrade.isPending}>{upgrade.isPending ? "Abrindo Mercado Pago..." : `Assinar Pro por ${formatPrice(plan.price)}/mês`} <ArrowRight size={17} /></button>}
+        {plan.status === "AUTHORIZED" && <button className="plan-cancel" onClick={() => { if (window.confirm("Deseja solicitar o cancelamento da renovação Pro?")) cancel.mutate(); }} disabled={cancel.isPending}>{cancel.isPending ? "Solicitando..." : "Cancelar renovação"}</button>}
+      </article>
+    </div>
+    {(upgrade.error || cancel.error) && <p className="form-error">{((upgrade.error ?? cancel.error) as Error).message}</p>}
+    {plan.code === "FREE" && <section className="plan-setup-note"><div><strong>Deixe sua vitrine pronta para receber pedidos</strong><p>Configure WhatsApp, cidade e estado para que clientes locais possam pedir seus produtos.</p></div><button className="button button-dark" onClick={onSettings}>Configurar loja</button></section>}
+    <p className="plan-billing-note">A assinatura Pro só será ativada após confirmação do Mercado Pago. O pagamento recorrente será cobrado mensalmente.</p>
+  </div>;
 }
 
 function Overview({ data, onNavigate }: { data: Dashboard; onNavigate: (tab: Tab) => void }) {
@@ -94,13 +159,13 @@ function Overview({ data, onNavigate }: { data: Dashboard; onNavigate: (tab: Tab
   </div>;
 }
 
-function Products({ data, onEdit }: { data: Dashboard; onEdit: (product: Product) => void }) {
+function Products({ data, onEdit, onNavigate }: { data: Dashboard; onEdit: (product: Product) => void; onNavigate: (tab: Tab) => void }) {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const products = data.products.filter((product) => product.name.toLowerCase().includes(search.toLowerCase()));
   const toggle = useMutation({ mutationFn: (product: Product) => api(`/products/${product.id}`, { method: "PATCH", body: JSON.stringify({ status: product.status === "ACTIVE" ? "INACTIVE" : "ACTIVE" }) }), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["dashboard"] }) });
   const remove = useMutation({ mutationFn: (id: string) => api(`/products/${id}`, { method: "DELETE" }), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["dashboard"] }) });
-  return <div className="dashboard-content"><div className="product-admin-toolbar"><div className="admin-search"><Search size={18} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar no seu catálogo" /></div><span>{products.length} produtos</span></div><div className="admin-product-list">{products.map((product) => <article key={product.id}><img src={imageUrl(product.images?.[0]?.url)} onError={useFallbackImage} alt="" /><div className="admin-product-name"><strong>{product.name}</strong><span>{product.category?.name}</span></div><strong>{formatPrice(product.price)}</strong><span className={product.stock <= 5 ? "low-stock" : ""}>{product.stock} em estoque</span><button className={clsx("switch", product.status === "ACTIVE" && "active")} onClick={() => toggle.mutate(product)}><i /></button><div className="row-actions"><button title="Editar" onClick={() => onEdit(product)}><Edit3 size={17} /></button><button title="Desativar" onClick={() => remove.mutate(product.id)}><Trash2 size={17} /></button></div></article>)}</div></div>;
+  return <div className="dashboard-content">{data.plan.productLimit !== null && data.plan.activeProducts >= data.plan.productLimit && <section className="plan-limit-banner"><div><strong>Você atingiu o limite do plano Grátis</strong><p>Seu catálogo já tem {data.plan.activeProducts} produtos ativos. Faça upgrade para adicionar mais.</p></div><button className="button button-primary" onClick={() => onNavigate("plan")}><Crown size={16} /> Conhecer o Pro</button></section>}<div className="product-admin-toolbar"><div className="admin-search"><Search size={18} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar no seu catálogo" /></div><span>{products.length} produtos</span></div><div className="admin-product-list">{products.map((product) => <article key={product.id}><img src={imageUrl(product.images?.[0]?.url)} onError={useFallbackImage} alt="" /><div className="admin-product-name"><strong>{product.name}</strong><span>{product.category?.name}</span></div><strong>{formatPrice(product.price)}</strong><span className={product.stock <= 5 ? "low-stock" : ""}>{product.stock} em estoque</span><button className={clsx("switch", product.status === "ACTIVE" && "active")} onClick={() => toggle.mutate(product)}><i /></button><div className="row-actions"><button title="Editar" onClick={() => onEdit(product)}><Edit3 size={17} /></button><button title="Desativar" onClick={() => remove.mutate(product.id)}><Trash2 size={17} /></button></div></article>)}</div></div>;
 }
 
 function SellerOrders({ orders }: { orders: Order[] }) {
@@ -119,11 +184,14 @@ function SettingsView({ seller }: { seller: Dashboard["seller"] }) {
   const [storeName, setStoreName] = useState(seller.storeName);
   const [description, setDescription] = useState(seller.description ?? "");
   const [postalCode, setPostalCode] = useState(seller.postalCode ?? "");
+  const [whatsappPhone, setWhatsappPhone] = useState(seller.whatsappPhone ?? "");
+  const [city, setCity] = useState(seller.city ?? "");
+  const [state, setState] = useState(seller.state ?? "");
   const mutation = useMutation({
-    mutationFn: () => api("/seller/settings", { method: "PATCH", body: JSON.stringify({ storeName, description, postalCode }) }),
+    mutationFn: () => api("/seller/settings", { method: "PATCH", body: JSON.stringify({ storeName, description, postalCode, whatsappPhone, city, state }) }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
   });
-  return <div className="dashboard-content settings-panel"><div><span className="store-avatar large">{seller.storeName[0]}</span><div><h2>{seller.storeName}</h2><p>{seller.description ?? "Adicione uma descrição para apresentar sua loja aos clientes."}</p></div></div><form onSubmit={(event) => { event.preventDefault(); mutation.mutate(); }}><label>Nome da loja<input required minLength={2} value={storeName} onChange={(event) => setStoreName(event.target.value)} /></label><label>CEP de origem dos envios<input required inputMode="numeric" value={postalCode} onChange={(event) => setPostalCode(event.target.value.replace(/\D/g, "").slice(0, 8))} /></label><label>Descrição<textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={4} placeholder="Conte um pouco sobre sua loja" /></label>{mutation.error && <p className="form-error">{(mutation.error as Error).message}</p>}<button className="button button-primary" disabled={mutation.isPending}>{mutation.isPending ? "Salvando..." : "Salvar alterações"}</button></form></div>;
+  return <div className="dashboard-content settings-panel"><div><span className="store-avatar large">{seller.storeName[0]}</span><div><h2>{seller.storeName}</h2><p>{seller.description ?? "Adicione uma descrição para apresentar sua loja aos clientes."}</p></div></div><form onSubmit={(event) => { event.preventDefault(); mutation.mutate(); }}><label>Nome da loja<input required minLength={2} value={storeName} onChange={(event) => setStoreName(event.target.value)} /></label><label>CEP de origem dos envios<input required inputMode="numeric" value={postalCode} onChange={(event) => setPostalCode(event.target.value.replace(/\D/g, "").slice(0, 8))} /></label><label>WhatsApp para pedidos locais<input required type="tel" inputMode="tel" value={whatsappPhone} onChange={(event) => setWhatsappPhone(event.target.value.replace(/\D/g, "").slice(0, 13))} placeholder="5511999999999" /></label><div className="settings-locality"><label>Cidade<input required value={city} onChange={(event) => setCity(event.target.value)} /></label><label>UF<input required maxLength={2} value={state} onChange={(event) => setState(event.target.value.toUpperCase().slice(0, 2))} placeholder="SP" /></label></div><small className="settings-hint">O plano Grátis usa cidade e WhatsApp para receber pedidos locais. Inclua DDI e DDD no número.</small><label>Descrição<textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={4} placeholder="Conte um pouco sobre sua loja" /></label>{mutation.error && <p className="form-error">{(mutation.error as Error).message}</p>}<button className="button button-primary" disabled={mutation.isPending}>{mutation.isPending ? "Salvando..." : "Salvar alterações"}</button></form></div>;
 }
 
 function ProductModal({ product, categories, onClose, onDone }: { product: Product | "new"; categories: Category[]; onClose: () => void; onDone: () => void }) {

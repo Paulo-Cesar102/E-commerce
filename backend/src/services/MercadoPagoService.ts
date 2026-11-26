@@ -18,6 +18,15 @@ type MercadoPagoPayment = {
   external_reference?: string | null;
 };
 
+type MercadoPagoSubscription = {
+  id: string;
+  status?: string;
+  external_reference?: string;
+  init_point?: string;
+  next_payment_date?: string;
+  auto_recurring?: { transaction_amount?: number; currency_id?: string };
+};
+
 export class MercadoPagoService {
   private parseSignature(signature: string) {
     return Object.fromEntries(
@@ -87,6 +96,75 @@ export class MercadoPagoService {
       initPoint: data.init_point ?? null,
       sandboxInitPoint: data.sandbox_init_point ?? null,
     };
+  }
+
+  async createProSubscription(input: { externalReference: string; payerEmail: string; amount: number }) {
+    if (!env.MERCADO_PAGO_ACCESS_TOKEN) {
+      throw new AppError(503, "Assinatura indisponivel: configure o Mercado Pago");
+    }
+
+    const frontendUrl = (env.FRONTEND_URL ?? env.CORS_ORIGIN).split(",")[0]?.trim();
+    if (!frontendUrl) throw new AppError(500, "FRONTEND_URL nao configurada");
+
+    const response = await fetch("https://api.mercadopago.com/preapproval", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.MERCADO_PAGO_ACCESS_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        reason: "Vitrine Pro",
+        external_reference: input.externalReference,
+        payer_email: input.payerEmail,
+        auto_recurring: {
+          frequency: 1,
+          frequency_type: "months",
+          transaction_amount: input.amount,
+          currency_id: "BRL",
+        },
+        back_url: `${frontendUrl.replace(/\/$/, "")}/dashboard?tab=plan`,
+        status: "pending",
+      }),
+    });
+
+    if (!response.ok) throw new AppError(502, "Nao foi possivel iniciar a assinatura Pro");
+
+    const subscription = (await response.json()) as MercadoPagoSubscription;
+    if (!subscription.id || !subscription.init_point) {
+      throw new AppError(502, "Mercado Pago retornou uma assinatura sem link de pagamento");
+    }
+    return {
+      id: subscription.id,
+      initPoint: subscription.init_point,
+      status: subscription.status ?? "pending",
+    };
+  }
+
+  async getProSubscription(subscriptionId: string) {
+    if (!env.MERCADO_PAGO_ACCESS_TOKEN) {
+      throw new AppError(503, "Assinatura indisponivel: configure o Mercado Pago");
+    }
+
+    const response = await fetch(`https://api.mercadopago.com/preapproval/${encodeURIComponent(subscriptionId)}`, {
+      headers: { Authorization: `Bearer ${env.MERCADO_PAGO_ACCESS_TOKEN}` },
+    });
+    if (!response.ok) throw new AppError(502, "Nao foi possivel consultar a assinatura no Mercado Pago");
+    return (await response.json()) as MercadoPagoSubscription;
+  }
+
+  async cancelProSubscription(subscriptionId: string) {
+    if (!env.MERCADO_PAGO_ACCESS_TOKEN) {
+      throw new AppError(503, "Assinatura indisponivel: configure o Mercado Pago");
+    }
+    const response = await fetch(`https://api.mercadopago.com/preapproval/${encodeURIComponent(subscriptionId)}`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${env.MERCADO_PAGO_ACCESS_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ status: "cancelled" }),
+    });
+    if (!response.ok) throw new AppError(502, "Nao foi possivel cancelar a assinatura no Mercado Pago");
   }
 
   async refundPayment(paymentId: string) {

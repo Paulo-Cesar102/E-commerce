@@ -15,6 +15,8 @@ import { wishlistRoutes } from "./routes/wishlist.routes.js";
 import { notificationRoutes } from "./routes/notification.routes.js";
 import { privacyRoutes } from "./routes/privacy.routes.js";
 import { adminRoutes } from "./routes/admin.routes.js";
+import { sellerPlanRoutes } from "./routes/sellerPlan.routes.js";
+import { quickSaleRoutes } from "./routes/quickSale.routes.js";
 import { uploadsDirectory } from "./middlewares/upload.js";
 import fs from "node:fs";
 
@@ -43,6 +45,8 @@ app.use("/auth", authRoutes);
 app.use("/products", productRoutes);
 app.use("/cart", cartRoutes);
 app.use("/orders", orderRoutes);
+app.use("/seller", sellerPlanRoutes);
+app.use("/quick-sales", quickSaleRoutes);
 app.use("/seller", sellerRoutes);
 app.use("/chats", chatRoutes);
 app.use("/addresses", addressRoutes);

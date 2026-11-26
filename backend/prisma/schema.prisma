@@ -58,6 +58,32 @@ enum SellerApprovalStatus {
   SUSPENDED
 }
 
+enum SellerPlan {
+  FREE
+  PRO
+}
+
+enum SellerSubscriptionStatus {
+  NONE
+  PENDING
+  AUTHORIZED
+  PAUSED
+  CANCELLED
+  REJECTED
+}
+
+enum ProductListingType {
+  STORE
+  QUICK_SALE
+}
+
+enum QuickSalePayoutStatus {
+  NOT_APPLICABLE
+  PENDING
+  PAID
+  VOIDED
+}
+
 enum ChatStatus {
   OPEN
   CLOSED
@@ -95,6 +121,8 @@ model User {
   couponRedemptions CouponRedemption[]
   passwordResetTokens PasswordResetToken[]
   emailVerificationTokens EmailVerificationToken[]
+  quickSaleProducts Product[] @relation("QuickSaleProducts")
+  directSaleOrders Order[] @relation("DirectSaleOrders")
 }
 
 model RefreshToken {
@@ -116,6 +144,15 @@ model SellerProfile {
   description String?
   postalCode  String?
   approvalStatus SellerApprovalStatus @default(PENDING)
+  plan          SellerPlan @default(FREE)
+  subscriptionStatus SellerSubscriptionStatus @default(NONE)
+  planExpiresAt DateTime?
+  mercadoPagoSubscriptionId String? @unique
+  subscriptionExternalReference String? @unique
+  subscriptionCheckoutUrl String?
+  whatsappPhone String?
+  city String?
+  state String?
   document String?
   legalName String?
   kycSubmittedAt DateTime?
@@ -173,14 +210,18 @@ model Product {
   description String
   price       Decimal       @db.Decimal(12, 2)
   stock       Int           @default(0)
+  listingType ProductListingType @default(STORE)
+  originPostalCode String?
   averageRating Decimal     @default(0) @db.Decimal(3, 2)
   ratingCount   Int         @default(0)
   status      ProductStatus @default(ACTIVE)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
-  sellerId   String
-  seller     SellerProfile @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  sellerId   String?
+  seller     SellerProfile? @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  ownerUserId String?
+  ownerUser User? @relation("QuickSaleProducts", fields: [ownerUserId], references: [id], onDelete: Restrict)
   categoryId String
   category   Category      @relation(fields: [categoryId], references: [id])
 
@@ -196,6 +237,7 @@ model Product {
   @@index([name])
   @@index([categoryId, status])
   @@index([sellerId, status])
+  @@index([ownerUserId, status])
 }
 
 model WishlistItem {
@@ -372,13 +414,18 @@ model Order {
   deliveryEstimateDate  DateTime?
   correiosTrackingCode  String?
   mercadoPagoPreference String?
+  quickSalePayoutStatus QuickSalePayoutStatus @default(NOT_APPLICABLE)
+  quickSalePayoutReference String?
+  quickSalePayoutPaidAt DateTime?
   createdAt             DateTime    @default(now())
   updatedAt             DateTime    @updatedAt
 
   customerId String
   customer   User @relation("CustomerOrders", fields: [customerId], references: [id])
-  sellerId   String
-  seller     SellerProfile @relation(fields: [sellerId], references: [id])
+  sellerId   String?
+  seller     SellerProfile? @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  directSellerUserId String?
+  directSeller User? @relation("DirectSaleOrders", fields: [directSellerUserId], references: [id], onDelete: Restrict)
 
   items        OrderItem[]
   payment      PaymentTransaction?
@@ -390,6 +437,7 @@ model Order {
 
   @@index([customerId, createdAt])
   @@index([sellerId, status])
+  @@index([directSellerUserId, status])
   @@index([checkoutId])
 }
 
@@ -481,7 +529,7 @@ model InventoryMovement {
 model PaymentTransaction {
   id             String        @id @default(uuid())
   provider       String        @default("MERCADO_PAGO")
-  providerRef    String?       @unique
+  providerRef    String?
   status         PaymentStatus @default(PENDING)
   rawPayload     Json?
   createdAt      DateTime      @default(now())
@@ -491,6 +539,8 @@ model PaymentTransaction {
   order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
   attempts PaymentAttempt[]
   webhookEvents PaymentWebhookEvent[]
+
+  @@index([providerRef])
 }
 
 model PaymentAttempt {

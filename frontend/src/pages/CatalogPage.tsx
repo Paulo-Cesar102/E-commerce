@@ -13,16 +13,22 @@ export function CatalogPage() {
   const q = params.get("q") ?? "";
   const categoryId = params.get("categoryId") ?? "";
   const sellerId = params.get("sellerId") ?? "";
+  const city = params.get("city") ?? "";
+  const state = params.get("state") ?? "";
   const sort = params.get("sort") ?? "rating";
   const page = Number(params.get("page") ?? 1);
   const query = new URLSearchParams({ page: String(page), limit: "12" });
   if (q) query.set("q", q);
   if (categoryId) query.set("categoryId", categoryId);
   if (sellerId) query.set("sellerId", sellerId);
+  if (city && state) {
+    query.set("city", city);
+    query.set("state", state);
+  }
   query.set("sort", sort);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["products", q, categoryId, sellerId, sort, page],
+    queryKey: ["products", q, categoryId, sellerId, city, state, sort, page],
     queryFn: () => api<ProductResponse>(`/products?${query}`, { auth: false }),
   });
   const { data: categories = [] } = useQuery({
@@ -50,7 +56,8 @@ export function CatalogPage() {
             <button key={category.id} className={categoryId === category.id ? "active" : ""} onClick={() => update("categoryId", category.id)}>{category.name}</button>
           ))}
         </div>
-        {(q || categoryId) && <button className="clear-filter" onClick={() => setParams({})}><X size={16} /> Limpar</button>}
+        {!sellerId && <div className="local-store-filter"><div><strong>Descubra lojas da sua cidade</strong><small>Informe sua localização para incluir vitrines locais que recebem pedidos pelo WhatsApp.</small></div><label>Cidade<input value={city} onChange={(event) => update("city", event.target.value)} placeholder="Sua cidade" /></label><label>UF<input value={state} maxLength={2} onChange={(event) => update("state", event.target.value.toUpperCase().slice(0, 2))} placeholder="SP" /></label></div>}
+        {(q || categoryId || city || state) && <button className="clear-filter" onClick={() => setParams({})}><X size={16} /> Limpar</button>}
         <label className="sort-select"><Star size={16} /><select value={sort} onChange={(event) => update("sort", event.target.value)}><option value="rating">Mais bem avaliados</option><option value="new">Mais recentes</option><option value="price_asc">Menor preço</option><option value="price_desc">Maior preço</option></select></label>
       </div>
       {isLoading && <Loader label="Buscando produtos" />}

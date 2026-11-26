@@ -6,6 +6,8 @@ import { MercadoPagoService } from "./MercadoPagoService.js";
 import { StockService } from "./StockService.js";
 import { AddressService } from "./AddressService.js";
 import { env } from "../config/env.js";
+import { SellerPlanService } from "./SellerPlanService.js";
+import { calculateQuickSaleCommission } from "./QuickSaleService.js";
 
 export class OrderService {
   constructor(
@@ -14,6 +16,7 @@ export class OrderService {
     private readonly correios = new CorreiosService(),
     private readonly orderRepository = new OrderRepository(),
     private readonly addresses = new AddressService(),
+    private readonly sellerPlans = new SellerPlanService(),
   ) {}
 
   async listMine(userId: string) {
@@ -27,13 +30,39 @@ export class OrderService {
       throw new AppError(400, "Carrinho vazio");
     }
 
-    const itemsBySeller = new Map<string, typeof cart.items>();
-    for (const item of cart.items) {
-      const list = itemsBySeller.get(item.product.sellerId) ?? [];
-      list.push(item);
-      itemsBySeller.set(item.product.sellerId, list);
+    const quickSaleItems = cart.items.filter((item) => item.product.listingType === "QUICK_SALE");
+    if (quickSaleItems.length) {
+      const quickSaleOwners = new Set(quickSaleItems.map((item) => `${item.product.ownerUserId}:${item.product.originPostalCode}`));
+      if (quickSaleItems.length !== cart.items.length || quickSaleOwners.size !== 1) {
+        throw new AppError(400, "Finalize anuncios de Venda rapida de um mesmo anunciante e CEP em um checkout separado das lojas.");
+      }
     }
 
+    const checkoutGroups = new Map<string, {
+      sellerId?: string;
+      directSellerUserId?: string;
+      items: typeof cart.items;
+    }>();
+    for (const item of cart.items) {
+      if (item.product.listingType === "QUICK_SALE") {
+        if (!item.product.ownerUserId) throw new AppError(409, "Anuncio rapido sem proprietario");
+        if (item.product.ownerUserId === userId) throw new AppError(403, "Voce nao pode comprar o proprio anuncio");
+        const key = `quick-sale:${item.product.ownerUserId}:${item.product.originPostalCode ?? ""}`;
+        const group = checkoutGroups.get(key) ?? { directSellerUserId: item.product.ownerUserId, items: [] };
+        group.items.push(item);
+        checkoutGroups.set(key, group);
+      } else {
+        if (!item.product.sellerId) throw new AppError(409, "Produto de loja sem lojista");
+        const key = `store:${item.product.sellerId}`;
+        const group = checkoutGroups.get(key) ?? { sellerId: item.product.sellerId, items: [] };
+        group.items.push(item);
+        checkoutGroups.set(key, group);
+      }
+    }
+
+    await this.sellerPlans.assertSellersCanCheckout(
+      [...checkoutGroups.values()].flatMap((group) => group.sellerId ? [group.sellerId] : []),
+    );
     if (!env.MERCADO_PAGO_ACCESS_TOKEN) throw new AppError(503, "Pagamento indisponivel: configure o Mercado Pago");
     const address = await this.addresses.getOwned(userId, input.addressId);
     const cartItems = cart.items;
@@ -51,27 +80,31 @@ export class OrderService {
       if (coupon?.minOrderValue && subtotalTotal < Number(coupon.minOrderValue)) throw new AppError(400, `Pedido minimo para o cupom: ${Number(coupon.minOrderValue).toFixed(2)}`);
       const discountTotal = coupon ? Math.min(coupon.type === "PERCENT" ? subtotalTotal * Number(coupon.value) / 100 : Number(coupon.value), subtotalTotal) : 0;
       let discountAllocated = 0;
-      const sellerEntries = [...itemsBySeller.entries()];
+      const sellerEntries = [...checkoutGroups.values()];
 
-      for (const [sellerIndex, [sellerId, items]] of sellerEntries.entries()) {
+      for (const [sellerIndex, group] of sellerEntries.entries()) {
+        const { sellerId, directSellerUserId, items } = group;
         await this.stockService.reserve(
           tx,
           items.map((item) => ({ productId: item.productId, variantId: item.variantId, quantity: item.quantity })),
         );
 
-        const origin = items[0]?.product.seller.postalCode;
+        const origin = items[0]?.product.seller?.postalCode ?? items[0]?.product.originPostalCode;
         if (!origin) throw new AppError(422, "A loja ainda nao configurou o CEP de origem para entrega");
         const quote = await this.correios.quote({ fromPostalCode: origin, toPostalCode: address.postalCode, items: items.map((item) => ({ quantity: item.quantity, unitPrice: Number(item.variant?.price ?? item.product.price) })) });
         const subtotal = items.reduce((sum, item) => sum + Number(item.variant?.price ?? item.product.price) * item.quantity, 0);
         const discount = sellerIndex === sellerEntries.length - 1 ? discountTotal - discountAllocated : Math.round(discountTotal * subtotal / subtotalTotal * 100) / 100;
         discountAllocated += discount;
-        const platformFee = Math.round((subtotal - discount) * env.PLATFORM_FEE_PERCENT) / 100;
+        const platformFee = directSellerUserId
+          ? calculateQuickSaleCommission(subtotal - discount)
+          : Math.round((subtotal - discount) * env.PLATFORM_FEE_PERCENT) / 100;
         const total = subtotal + quote.price - discount;
         const deliveryEstimateDate = new Date(); deliveryEstimateDate.setDate(deliveryEstimateDate.getDate() + quote.deliveryDays);
         const createdOrder = await this.orderRepository.createOrder(tx, {
           checkoutId,
           customerId: userId,
-          sellerId,
+          ...(sellerId ? { sellerId } : {}),
+          ...(directSellerUserId ? { directSellerUserId, quickSalePayout: true } : {}),
           subtotal, shippingCost: quote.price, discount, platformFee,
           total,
           shippingMethod: quote.service,
@@ -171,6 +204,11 @@ export class OrderService {
             ...(input.providerRef ? { providerRef: input.providerRef } : {}),
             ...(input.rawPayload === undefined ? {} : { rawPayload: input.rawPayload }),
           });
+          if (input.status === "APPROVED") {
+            await this.orderRepository.markQuickSaleProductsSold(tx, order.id);
+          } else if (order.directSellerUserId) {
+            await this.orderRepository.voidQuickSalePayout(tx, order.id);
+          }
           await this.orderRepository.markWebhookProcessed(tx, "MERCADO_PAGO", eventId);
         }
       }
@@ -261,11 +299,13 @@ export class OrderService {
       if (order.status === "PENDING_PAYMENT") {
         await this.stockService.release(tx, order.items.map((item) => ({ productId: item.productId, variantId: item.variantId, quantity: item.quantity })));
         await this.orderRepository.releaseCouponReservations(tx, [order.id]);
+        if (order.directSellerUserId) await this.orderRepository.voidQuickSalePayout(tx, order.id);
         return this.orderRepository.transitionOrder(tx, { orderId, fromStatus: "PENDING_PAYMENT", toStatus: "CANCELED", userId, type: "CUSTOMER_CANCEL", metadata: { reason } });
       }
       if (order.status !== "PAID" || !order.payment?.providerRef) throw new AppError(409, "Este pedido nao pode mais ser cancelado; solicite devolucao apos a entrega");
       await this.mercadoPago.refundPayment(order.payment.providerRef);
       await this.stockService.release(tx, order.items.map((item) => ({ productId: item.productId, variantId: item.variantId, quantity: item.quantity })));
+      if (order.directSellerUserId) await this.orderRepository.voidQuickSalePayout(tx, order.id);
       return this.orderRepository.transitionOrder(tx, { orderId, fromStatus: "PAID", toStatus: "REFUNDED", userId, type: "CUSTOMER_CANCEL_REFUND", metadata: { reason } });
     });
   }
@@ -290,6 +330,7 @@ export class OrderService {
         if (!order || order.status !== "PENDING_PAYMENT") return;
         await this.stockService.release(tx, order.items.map((item) => ({ productId: item.productId, variantId: item.variantId, quantity: item.quantity })));
         await this.orderRepository.releaseCouponReservations(tx, [id]);
+        if (order.directSellerUserId) await this.orderRepository.voidQuickSalePayout(tx, order.id);
         await this.orderRepository.transitionOrder(tx, { orderId: id, fromStatus: "PENDING_PAYMENT", toStatus: "CANCELED", type: "PAYMENT_EXPIRED" });
       });
     }

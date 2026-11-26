@@ -9,6 +9,7 @@ import type { Server } from "socket.io";
 import type { Request } from "express";
 import { AppError } from "../errors/AppError.js";
 import { env } from "../config/env.js";
+import { QuickSaleRepository } from "../repository/QuickSaleRepository.js";
 
 const notifyAdminDashboard = (req: Request, type: string) => {
   req.app.locals.io?.to("admin:dashboard").emit("admin:refresh", { type });
@@ -18,15 +19,42 @@ const couponSchema = z.object({ code: z.string().trim().min(2).max(40), type: z.
 const kycSchema = z.object({ approvalStatus: z.enum(["APPROVED", "REJECTED", "SUSPENDED", "PENDING"]), kycReviewNote: z.string().max(500).optional() });
 const withdrawalSchema = z.object({ amount: z.number().positive().max(1_000_000) });
 const dateRangeSchema = z.object({ from: z.coerce.date().optional(), to: z.coerce.date().optional() });
+const quickSalePayoutSchema = z.object({ reference: z.string().trim().min(3).max(120) });
 
 export const adminRoutes = Router();
 adminRoutes.use(authRequired, adminRequired);
+const quickSaleRepository = new QuickSaleRepository();
+
+adminRoutes.get("/quick-sale-payouts", asyncHandler(async (_req, res) => {
+  const eligible = await quickSaleRepository.findEligiblePayouts(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+  res.json(eligible.map((order) => ({
+    ...order,
+    sellerNet: Number(order.subtotal) - Number(order.discount) - Number(order.platformFee),
+  })));
+}));
+
+adminRoutes.patch("/quick-sale-payouts/:orderId", validateBody(quickSalePayoutSchema), asyncHandler(async (req, res) => {
+  const result = await quickSaleRepository.markPayoutPaid(String(req.params.orderId), req.body.reference);
+  if (result.count !== 1) throw new AppError(409, "Repasse indisponivel ou ja processado");
+  await prisma.auditLog.create({
+    data: {
+      userId: req.user!.sub,
+      action: "QUICK_SALE_PAYOUT_PAID",
+      entityType: "Order",
+      entityId: String(req.params.orderId),
+      metadata: { reference: req.body.reference },
+    },
+  });
+  notifyAdminDashboard(req, "QUICK_SALE_PAYOUT_PAID");
+  res.json({ paid: true });
+}));
+
 adminRoutes.get("/overview", asyncHandler(async (_req, res) => {
   const paidOrderWhere: Prisma.OrderWhereInput = { payment: { status: "APPROVED" }, status: { in: ["PAID", "PREPARING", "SHIPPED", "DELIVERED"] } };
   const [pendingKyc, products, orders, coupons, paidOrders, paidOrderCount, feeOrders, sellers, sellerSales, supportChats, withdrawals] = await Promise.all([
     prisma.sellerProfile.findMany({ where: { approvalStatus: "PENDING" }, include: { user: { select: { id: true, name: true, email: true } } }, orderBy: { kycSubmittedAt: "asc" } }),
-    prisma.product.findMany({ include: { seller: { select: { storeName: true } }, category: true }, orderBy: { createdAt: "desc" }, take: 100 }),
-    prisma.order.findMany({ include: { customer: { select: { name: true, email: true } }, seller: { select: { storeName: true } }, payment: true }, orderBy: { createdAt: "desc" }, take: 100 }),
+    prisma.product.findMany({ include: { seller: { select: { storeName: true } }, ownerUser: { select: { name: true } }, category: true }, orderBy: { createdAt: "desc" }, take: 100 }),
+    prisma.order.findMany({ include: { customer: { select: { name: true, email: true } }, seller: { select: { storeName: true } }, directSeller: { select: { name: true } }, payment: true }, orderBy: { createdAt: "desc" }, take: 100 }),
     prisma.coupon.findMany({ orderBy: { createdAt: "desc" } }),
     prisma.order.aggregate({ where: paidOrderWhere, _sum: { total: true, platformFee: true } }),
     prisma.order.count({ where: paidOrderWhere }),
@@ -74,7 +102,7 @@ adminRoutes.get("/orders", asyncHandler(async (req, res) => {
   const status = typeof req.query.status === "string" && req.query.status ? req.query.status as "PENDING_PAYMENT" | "PAID" | "PREPARING" | "SHIPPED" | "DELIVERED" | "CANCELED" | "REFUNDED" | "RETURN_REQUESTED" : undefined;
   const sellerId = typeof req.query.sellerId === "string" && req.query.sellerId ? req.query.sellerId : undefined;
   const customer = typeof req.query.customer === "string" && req.query.customer ? req.query.customer : undefined;
-  const orders = await prisma.order.findMany({ where: { ...(status ? { status } : {}), ...(sellerId ? { sellerId } : {}), ...(customer ? { customer: { OR: [{ name: { contains: customer, mode: "insensitive" } }, { email: { contains: customer, mode: "insensitive" } }] } } : {}), ...(parsed.data.from || parsed.data.to ? { createdAt: { ...(parsed.data.from ? { gte: parsed.data.from } : {}), ...(parsed.data.to ? { lte: parsed.data.to } : {}) } } : {}) }, include: { customer: { select: { name: true, email: true } }, seller: { select: { id: true, storeName: true } }, payment: true }, orderBy: { createdAt: "desc" }, take: 200 });
+  const orders = await prisma.order.findMany({ where: { ...(status ? { status } : {}), ...(sellerId ? { sellerId } : {}), ...(customer ? { customer: { OR: [{ name: { contains: customer, mode: "insensitive" } }, { email: { contains: customer, mode: "insensitive" } }] } } : {}), ...(parsed.data.from || parsed.data.to ? { createdAt: { ...(parsed.data.from ? { gte: parsed.data.from } : {}), ...(parsed.data.to ? { lte: parsed.data.to } : {}) } } : {}) }, include: { customer: { select: { name: true, email: true } }, seller: { select: { id: true, storeName: true } }, directSeller: { select: { name: true } }, payment: true }, orderBy: { createdAt: "desc" }, take: 200 });
   res.json(orders);
 }));
 
@@ -105,8 +133,8 @@ adminRoutes.get("/export/orders.csv", asyncHandler(async (req, res) => {
   const status = typeof req.query.status === "string" && req.query.status ? req.query.status as "PENDING_PAYMENT" | "PAID" | "PREPARING" | "SHIPPED" | "DELIVERED" | "CANCELED" | "REFUNDED" | "RETURN_REQUESTED" : undefined;
   const customer = typeof req.query.customer === "string" && req.query.customer ? req.query.customer : undefined;
   const sellerId = typeof req.query.sellerId === "string" && req.query.sellerId ? req.query.sellerId : undefined;
-  const orders = await prisma.order.findMany({ where: { ...(status ? { status } : {}), ...(sellerId ? { sellerId } : {}), ...(customer ? { customer: { OR: [{ name: { contains: customer, mode: "insensitive" } }, { email: { contains: customer, mode: "insensitive" } }] } } : {}), ...(parsed.data.from || parsed.data.to ? { createdAt: { ...(parsed.data.from ? { gte: parsed.data.from } : {}), ...(parsed.data.to ? { lte: parsed.data.to } : {}) } } : {}) }, select: { id: true, createdAt: true, status: true, total: true, customer: { select: { name: true, email: true } }, seller: { select: { storeName: true } } }, orderBy: { createdAt: "desc" }, take: 1000 });
+  const orders = await prisma.order.findMany({ where: { ...(status ? { status } : {}), ...(sellerId ? { sellerId } : {}), ...(customer ? { customer: { OR: [{ name: { contains: customer, mode: "insensitive" } }, { email: { contains: customer, mode: "insensitive" } }] } } : {}), ...(parsed.data.from || parsed.data.to ? { createdAt: { ...(parsed.data.from ? { gte: parsed.data.from } : {}), ...(parsed.data.to ? { lte: parsed.data.to } : {}) } } : {}) }, select: { id: true, createdAt: true, status: true, total: true, customer: { select: { name: true, email: true } }, seller: { select: { storeName: true } }, directSeller: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 1000 });
   const escape = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
-  const rows = ["id,data,status,total,cliente,email,loja", ...orders.map((order) => [order.id, new Date(order.createdAt).toLocaleDateString("pt-BR"), order.status, order.total, order.customer.name, order.customer.email, order.seller.storeName].map(escape).join(","))];
+  const rows = ["id,data,status,total,cliente,email,loja", ...orders.map((order) => [order.id, new Date(order.createdAt).toLocaleDateString("pt-BR"), order.status, order.total, order.customer.name, order.customer.email, order.seller?.storeName ?? order.directSeller?.name ?? "Venda rápida"].map(escape).join(","))];
   res.type("text/csv; charset=utf-8").setHeader("Content-Disposition", "attachment; filename=pedidos-vitrine.csv").send(`\ufeff${rows.join("\n")}`);
 }));

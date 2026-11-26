@@ -30,4 +30,42 @@ describe("MercadoPagoService", () => {
       }),
     );
   });
+
+  it("cria uma assinatura mensal Pro com preco e retorno configurados", async () => {
+    env.MERCADO_PAGO_ACCESS_TOKEN = "test-token";
+    env.FRONTEND_URL = "https://vitrine.example";
+    const fetchMock = jest.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "sub-1", init_point: "https://payment.test/sub-1" }), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await new MercadoPagoService().createProSubscription({
+      externalReference: "seller-subscription-1",
+      payerEmail: "seller@example.com",
+      amount: 25,
+    });
+
+    expect(result).toEqual({ id: "sub-1", initPoint: "https://payment.test/sub-1", status: "pending" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.mercadopago.com/preapproval",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          reason: "Vitrine Pro",
+          external_reference: "seller-subscription-1",
+          payer_email: "seller@example.com",
+          auto_recurring: {
+            frequency: 1,
+            frequency_type: "months",
+            transaction_amount: 25,
+            currency_id: "BRL",
+          },
+          back_url: "https://vitrine.example/dashboard?tab=plan",
+          status: "pending",
+        }),
+      }),
+    );
+  });
 });

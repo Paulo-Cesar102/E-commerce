@@ -1,0 +1,38 @@
+import { Router } from "express";
+import { authRequired } from "../middlewares/auth.js";
+import { uploadProductImages } from "../middlewares/upload.js";
+import { validateBody } from "../middlewares/validate.js";
+import { createQuickSaleSchema, quickSaleListingStatusSchema, quickSaleOrderStatusSchema } from "../schemas/quickSale.schema.js";
+import { FileStorageService } from "../services/FileStorageService.js";
+import { QuickSaleService } from "../services/QuickSaleService.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+
+export const quickSaleRoutes = Router();
+const quickSaleService = new QuickSaleService();
+
+quickSaleRoutes.get("/mine", authRequired, asyncHandler(async (req, res) => {
+  res.json(await quickSaleService.getMine(req.user!.sub));
+}));
+
+quickSaleRoutes.post("/uploads", authRequired, uploadProductImages, asyncHandler(async (req, res) => {
+  const files = req.files as Express.Multer.File[];
+  const storage = new FileStorageService();
+  res.status(201).json({ images: await storage.uploadProductFiles(files, `${req.protocol}://${req.get("host")}`) });
+}));
+
+quickSaleRoutes.post("/", authRequired, validateBody(createQuickSaleSchema), asyncHandler(async (req, res) => {
+  res.status(201).json(await quickSaleService.create(req.user!.sub, req.body));
+}));
+
+quickSaleRoutes.patch("/orders/:id/status", authRequired, validateBody(quickSaleOrderStatusSchema), asyncHandler(async (req, res) => {
+  res.json(await quickSaleService.updateSaleOrderStatus(
+    req.user!.sub,
+    String(req.params.id),
+    req.body.status,
+    req.body.trackingCode,
+  ));
+}));
+
+quickSaleRoutes.patch("/:id", authRequired, validateBody(quickSaleListingStatusSchema), asyncHandler(async (req, res) => {
+  res.json(await quickSaleService.updateListingStatus(req.user!.sub, String(req.params.id), req.body.status));
+}));

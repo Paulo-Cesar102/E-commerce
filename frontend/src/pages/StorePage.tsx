@@ -10,6 +10,9 @@ type StoreResponse = {
   id: string;
   storeName: string;
   description?: string;
+  plan: "FREE" | "PRO";
+  city?: string | null;
+  state?: string | null;
   categories: Category[];
   products: Product[];
 };
@@ -30,12 +33,12 @@ export function StorePage() {
       <section className="store-header">
         <div className="store-identity">
           <span className="store-logo"><Store size={36} /></span>
-          <div><span className="verified-label"><BadgeCheck size={15} /> Loja verificada</span><h1>{data.storeName}</h1><p>{data.description ?? "Uma loja independente dentro da Vitrine."}</p></div>
+          <div><span className="verified-label"><BadgeCheck size={15} /> Loja verificada</span><h1>{data.storeName}</h1><p>{data.description ?? "Uma loja independente dentro da Vitrine."}</p>{data.plan === "FREE" && <span className="store-local-label">Atendimento local · {data.city}{data.state ? `/${data.state}` : ""} · pedidos pelo WhatsApp</span>}</div>
         </div>
         <div className="store-stats">
           <span><strong>{data.products.length}</strong><small>produtos</small></span>
           <span><strong>{ratingCount}</strong><small>avaliações</small></span>
-          <span><PackageCheck /><small>Compra protegida</small></span>
+          <span><PackageCheck /><small>{data.plan === "PRO" ? "Compra protegida" : "Pedido local"}</small></span>
         </div>
       </section>
       <nav className="store-categories">

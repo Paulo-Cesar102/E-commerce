@@ -2,7 +2,18 @@ import prisma from "../../prisma/prisma.js";
 
 export class SellerDashboardRepository {
   findSellerByUserId(userId: string) {
-    return prisma.sellerProfile.findUnique({ where: { userId } });
+    return prisma.sellerProfile.findUnique({
+      where: { userId },
+      select: {
+        id: true,
+        storeName: true,
+        description: true,
+        postalCode: true,
+        whatsappPhone: true,
+        city: true,
+        state: true,
+      },
+    });
   }
 
   summaryData(sellerId: string) {
@@ -33,12 +44,15 @@ export class SellerDashboardRepository {
     ]);
   }
 
-  updateSettings(sellerId: string, input: { storeName: string; description?: string; postalCode: string }) {
+  updateSettings(sellerId: string, input: { storeName: string; description?: string; postalCode: string; whatsappPhone: string; city: string; state: string }) {
     return prisma.sellerProfile.update({
       where: { id: sellerId },
       data: {
         storeName: input.storeName,
         postalCode: input.postalCode,
+        whatsappPhone: input.whatsappPhone,
+        city: input.city,
+        state: input.state,
         ...(input.description !== undefined ? { description: input.description } : {}),
       },
     });

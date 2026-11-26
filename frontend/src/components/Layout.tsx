@@ -89,6 +89,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 </button>
                 <div className="account-dropdown">
                   <Link to="/pedidos">Meus pedidos</Link>
+                  <Link to="/anunciar">Venda rápida</Link>
                   <Link to="/chat">Mensagens</Link>
                   {user.role !== "CUSTOMER" && <Link to="/dashboard">Painel da loja</Link>}
                   {user.role === "ADMIN" && <Link to="/admin">Administração</Link>}
@@ -133,6 +134,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <NavLink to="/recomendados"><Sparkles size={15} /> Recomendados</NavLink>
           <NavLink to="/buscar?sort=new">Novidades</NavLink>
           <NavLink to="/buscar?sort=price_asc">Melhores ofertas</NavLink>
+          <NavLink to="/anunciar">Anunciar item</NavLink>
           <NavLink to="/sobre">Sobre a Vitrine</NavLink>
           {user?.role !== "CUSTOMER" && user && (
             <NavLink to={user.role === "ADMIN" ? "/admin" : "/dashboard"} className="seller-link">
@@ -157,6 +159,7 @@ export function Layout({ children }: { children: ReactNode }) {
               <Link to="/recomendados" onClick={() => setMobileOpen(false)}>Mais bem avaliados</Link>
               {categories.slice(0, 6).map((category) => <Link key={category.id} to={`/buscar?categoryId=${category.id}`} onClick={() => setMobileOpen(false)}>{category.name}</Link>)}
               <Link to="/pedidos" onClick={() => setMobileOpen(false)}>Meus pedidos</Link>
+              <Link to="/anunciar" onClick={() => setMobileOpen(false)}>Venda rápida</Link>
               <Link to="/chat" onClick={() => setMobileOpen(false)}>Mensagens</Link>
               <Link to="/sobre" onClick={() => setMobileOpen(false)}>Sobre a Vitrine</Link>
               {user?.role !== "CUSTOMER" && user && <Link to="/dashboard" onClick={() => setMobileOpen(false)}>Painel da loja</Link>}
@@ -174,7 +177,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
         <div><strong>Comprar</strong><Link to="/buscar">Produtos</Link><Link to="/pedidos">Meus pedidos</Link></div>
         <div><strong>Atendimento</strong><Link to="/chat">Falar com a loja</Link><Link to="/sobre">Sobre nós</Link></div>
-        <div><strong>Vender</strong><Link to="/criar-conta?tipo=vendedor">Criar minha loja</Link><Link to="/dashboard">Painel do vendedor</Link></div>
+        <div><strong>Vender</strong><Link to="/anunciar">Venda rápida</Link><Link to="/criar-conta?tipo=vendedor">Criar minha loja</Link><Link to="/dashboard">Painel do vendedor</Link></div>
       </footer>
     </div>
   );
