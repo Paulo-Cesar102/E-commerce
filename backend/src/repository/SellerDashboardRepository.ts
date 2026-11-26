@@ -27,7 +27,7 @@ export class SellerDashboardRepository {
       prisma.product.findMany({ where: { sellerId }, include: { category: true, images: { take: 1 }, variants: { where: { active: true } } } }),
       prisma.order.findMany({
         where: { sellerId },
-        include: { customer: { select: { id: true, name: true, email: true } }, items: true },
+        include: { customer: { select: { id: true, name: true, email: true } }, items: true, shipments: { orderBy: { packageNumber: "asc" } } },
         orderBy: { createdAt: "desc" },
         take: 20,
       }),

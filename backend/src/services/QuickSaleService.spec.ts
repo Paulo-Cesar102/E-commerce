@@ -43,6 +43,10 @@ describe("QuickSaleService", () => {
       description: "Console em bom estado, com controle e cabos.",
       price: 250,
       originPostalCode: "12345678",
+      weightGrams: 1200,
+      lengthCm: 30,
+      widthCm: 20,
+      heightCm: 10,
       images: [{ url: "https://images.test/console.webp" }],
     });
 
@@ -51,5 +55,28 @@ describe("QuickSaleService", () => {
       expect.objectContaining({ name: "Console usado" }),
       false,
     );
+  });
+
+  it("requires one tracking code per package before marking a sale as shipped", async () => {
+    const tx = {};
+    const repository = {
+      transaction: jest.fn((callback: (transaction: object) => Promise<unknown>) => callback(tx)),
+      findOwnedSaleOrder: jest.fn().mockResolvedValue({
+        id: "order-1",
+        status: "PAID",
+        payment: { status: "APPROVED" },
+        shipments: [{ packageNumber: 1 }, { packageNumber: 2 }],
+      }),
+      transitionSaleOrder: jest.fn().mockResolvedValue({ id: "order-1" }),
+    };
+    const service = new QuickSaleService(repository as never, {} as never);
+
+    await expect(service.updateSaleOrderStatus("seller-1", "order-1", "SHIPPED", ["TRACK001"]))
+      .rejects.toMatchObject({ statusCode: 400 });
+    await service.updateSaleOrderStatus("seller-1", "order-1", "SHIPPED", ["TRACK001", "TRACK002"]);
+
+    expect(repository.transitionSaleOrder).toHaveBeenCalledWith(tx, expect.objectContaining({
+      trackingCodes: ["TRACK001", "TRACK002"],
+    }));
   });
 });

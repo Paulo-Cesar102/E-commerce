@@ -175,9 +175,27 @@ function SellerOrders({ orders }: { orders: Order[] }) {
 
 function OrderTable({ orders, editable = false }: { orders: Order[]; editable?: boolean }) {
   const queryClient = useQueryClient();
-  const mutation = useMutation({ mutationFn: ({ id, status }: { id: string; status: string }) => api(`/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["dashboard"] }) });
+  const mutation = useMutation({ mutationFn: ({ id, status, trackingCodes }: { id: string; status: string; trackingCodes?: string[] }) => api(`/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status, trackingCodes }) }), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["dashboard"] }) });
+  function changeStatus(order: Order, status: string) {
+    if (status !== "SHIPPED") {
+      mutation.mutate({ id: order.id, status });
+      return;
+    }
+    const packages = order.shipments ?? [];
+    if (!packages.length) {
+      window.alert("Este pedido não tem pacotes de envio registrados.");
+      return;
+    }
+    const trackingCodes: string[] = [];
+    for (const [index, shipment] of packages.entries()) {
+      const trackingCode = window.prompt(`Rastreio do pacote ${index + 1} de ${packages.length}`);
+      if (!trackingCode?.trim()) return;
+      trackingCodes.push(trackingCode.trim());
+    }
+    mutation.mutate({ id: order.id, status, trackingCodes });
+  }
   if (!orders.length) return <div className="table-empty">Nenhum pedido recebido ainda.</div>;
-  return <div className="order-table"><div className="table-row table-head"><span>Pedido</span><span>Cliente</span><span>Data</span><span>Total</span><span>Status</span><span /></div>{orders.map((order) => <div className="table-row" key={order.id}><strong>#{order.id.slice(0, 8).toUpperCase()}</strong><span>{order.customer?.name ?? "Cliente"}</span><span>{formatDate(order.createdAt)}</span><strong>{formatPrice(order.total)}</strong><span>{editable ? <select value={order.status} onChange={(event) => mutation.mutate({ id: order.id, status: event.target.value })}><option value="PREPARING">Em preparação</option><option value="SHIPPED">Enviado</option><option value="DELIVERED">Entregue</option><option value="CANCELED">Cancelado</option><option value="REFUNDED">Reembolsado</option></select> : <StatusBadge status={order.status} />}</span><a href="/chat" title="Conversar"><MessageCircle size={17} /></a></div>)}</div>;
+  return <div className="order-table">{mutation.error && <p className="form-error">{(mutation.error as Error).message}</p>}<div className="table-row table-head"><span>Pedido</span><span>Cliente</span><span>Data</span><span>Total</span><span>Status</span><span /></div>{orders.map((order) => <div className="table-row" key={order.id}><strong>#{order.id.slice(0, 8).toUpperCase()}{order.shipments?.some((shipment) => shipment.trackingCode) && <small>Rastreios: {order.shipments.map((shipment) => shipment.trackingCode ? `${shipment.packageLabel ?? `Pacote ${shipment.packageNumber}`}: ${shipment.trackingCode}` : null).filter(Boolean).join(" · ")}</small>}</strong><span>{order.customer?.name ?? "Cliente"}</span><span>{formatDate(order.createdAt)}</span><strong>{formatPrice(order.total)}</strong><span>{editable ? <select value={order.status} onChange={(event) => changeStatus(order, event.target.value)}><option value="PREPARING">Em preparação</option><option value="SHIPPED">Enviado</option><option value="DELIVERED">Entregue</option><option value="CANCELED">Cancelado</option><option value="REFUNDED">Reembolsado</option></select> : <StatusBadge status={order.status} />}</span><a href="/chat" title="Conversar"><MessageCircle size={17} /></a></div>)}</div>;
 }
 
 function SettingsView({ seller }: { seller: Dashboard["seller"] }) {
@@ -199,7 +217,7 @@ function ProductModal({ product, categories, onClose, onDone }: { product: Produ
   const editing = product !== "new";
   const firstVariant = editing ? product.variants?.[0] : undefined;
   const [extraVariants, setExtraVariants] = useState<VariantDraft[]>(editing ? (product.variants?.slice(1).map((variant) => ({ sku: variant.sku, size: variant.attributes.size ?? "", color: variant.attributes.color ?? "", flavor: variant.attributes.flavor ?? "", price: variant.price !== undefined ? String(variant.price) : "", stock: String(variant.stock) })) ?? []) : []);
-  const [form, setForm] = useState({ name: editing ? product.name : "", description: editing ? product.description : "", price: editing ? String(product.price) : "", stock: editing ? String(product.stock) : "", categoryId: editing ? product.categoryId : categories[0]?.id ?? "", size: firstVariant?.attributes.size ?? "", color: firstVariant?.attributes.color ?? "", flavor: firstVariant?.attributes.flavor ?? "", variantSku: firstVariant?.sku ?? "", variantPrice: firstVariant?.price !== undefined ? String(firstVariant.price) : "", variantStock: firstVariant ? String(firstVariant.stock) : "" });
+  const [form, setForm] = useState({ name: editing ? product.name : "", description: editing ? product.description : "", price: editing ? String(product.price) : "", stock: editing ? String(product.stock) : "", weightGrams: editing && product.weightGrams ? String(product.weightGrams) : "", lengthCm: editing && product.lengthCm ? String(product.lengthCm) : "", widthCm: editing && product.widthCm ? String(product.widthCm) : "", heightCm: editing && product.heightCm ? String(product.heightCm) : "", categoryId: editing ? product.categoryId : categories[0]?.id ?? "", size: firstVariant?.attributes.size ?? "", color: firstVariant?.attributes.color ?? "", flavor: firstVariant?.attributes.flavor ?? "", variantSku: firstVariant?.sku ?? "", variantPrice: firstVariant?.price !== undefined ? String(firstVariant.price) : "", variantStock: firstVariant ? String(firstVariant.stock) : "" });
   const [images, setImages] = useState<DraftProductImage[]>(editing ? product.images : []);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
@@ -251,7 +269,7 @@ function ProductModal({ product, categories, onClose, onDone }: { product: Produ
       const drafts = [{ sku: form.variantSku, size: form.size, color: form.color, flavor: form.flavor, price: form.variantPrice, stock: form.variantStock }, ...extraVariants];
       const variants = drafts.filter((variant) => variant.sku).map((variant) => ({ sku: variant.sku, attributes: Object.fromEntries([["size", variant.size], ["color", variant.color], ["flavor", variant.flavor]].filter(([, value]) => value)), ...(variant.price ? { price: Number(variant.price) } : {}), stock: Number(variant.stock || 0) }));
       const options = [...new Map(variants.flatMap((variant) => Object.entries(variant.attributes)).map(([type, value]) => [`${type}:${value}`, { type, value }])).values()];
-      return await api(editing ? `/products/${product.id}` : "/products", { method: editing ? "PATCH" : "POST", body: JSON.stringify({ categoryId: form.categoryId, name: form.name, description: form.description, price: Number(form.price), stock: Number(form.stock), images: uploadedImages, options, variants }) });
+      return await api(editing ? `/products/${product.id}` : "/products", { method: editing ? "PATCH" : "POST", body: JSON.stringify({ categoryId: form.categoryId, name: form.name, description: form.description, price: Number(form.price), stock: Number(form.stock), weightGrams: Number(form.weightGrams), lengthCm: Number(form.lengthCm), widthCm: Number(form.widthCm), heightCm: Number(form.heightCm), images: uploadedImages, options, variants }) });
     } finally {
       setUploading(false);
     }
@@ -273,6 +291,11 @@ function ProductModal({ product, categories, onClose, onDone }: { product: Produ
           <label className="span-2">Descricao<textarea required minLength={10} rows={4} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
           <label>Preco<input required type="number" min="0.01" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></label>
           <label>Estoque<input required type="number" min="0" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} /></label>
+          <label>Peso embalado (g)<input required type="number" min="1" step="1" value={form.weightGrams} onChange={(e) => setForm({ ...form, weightGrams: e.target.value })} placeholder="Ex.: 1200" /></label>
+          <label>Comprimento (cm)<input required type="number" min="1" step="1" value={form.lengthCm} onChange={(e) => setForm({ ...form, lengthCm: e.target.value })} placeholder="Ex.: 30" /></label>
+          <label>Largura (cm)<input required type="number" min="1" step="1" value={form.widthCm} onChange={(e) => setForm({ ...form, widthCm: e.target.value })} placeholder="Ex.: 20" /></label>
+          <label>Altura (cm)<input required type="number" min="1" step="1" value={form.heightCm} onChange={(e) => setForm({ ...form, heightCm: e.target.value })} placeholder="Ex.: 10" /></label>
+          <p className="settings-hint span-2">Informe as medidas e o peso do pacote já embalado para evitar uma cotação de frete incorreta.</p>
           <label className="span-2">Categoria<select required value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}><option value="">Selecione</option>{categories.map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}</select></label>
           <div className="span-2 image-upload-field">
             <span>Fotos do produto <small>{images.length}/6</small></span>

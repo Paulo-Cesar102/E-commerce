@@ -45,6 +45,10 @@ export function QuickSalePage() {
           description: values.get("description"),
           price: Number(String(values.get("price")).replace(",", ".")),
           originPostalCode: values.get("originPostalCode"),
+          weightGrams: Number(values.get("weightGrams")),
+          lengthCm: Number(values.get("lengthCm")),
+          widthCm: Number(values.get("widthCm")),
+          heightCm: Number(values.get("heightCm")),
           images: uploaded.images,
         }),
       });
@@ -65,8 +69,8 @@ export function QuickSalePage() {
     },
   });
   const updateOrder = useMutation({
-    mutationFn: ({ id, status, trackingCode }: { id: string; status: "SHIPPED" | "DELIVERED"; trackingCode?: string }) =>
-      api(`/quick-sales/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status, trackingCode }) }),
+    mutationFn: ({ id, status, trackingCodes }: { id: string; status: "SHIPPED" | "DELIVERED"; trackingCodes?: string[] }) =>
+      api(`/quick-sales/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status, trackingCodes }) }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["quick-sales", "mine"] }),
   });
 
@@ -96,7 +100,12 @@ export function QuickSalePage() {
           <label>Categoria<select name="categoryId" required defaultValue=""><option value="" disabled>Escolha uma categoria</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
           <label>Preço<input name="price" required type="number" min="0.01" step="0.01" placeholder="0,00" /></label>
           <label>CEP de origem<input name="originPostalCode" required inputMode="numeric" minLength={8} maxLength={9} placeholder="00000-000" onChange={(event) => { event.currentTarget.value = event.currentTarget.value.replace(/\D/g, "").slice(0, 8).replace(/^(\d{5})(\d)/, "$1-$2"); }} /></label>
+          <label>Peso embalado (g)<input name="weightGrams" required type="number" min="1" step="1" placeholder="Ex.: 1200" /></label>
+          <label>Comprimento (cm)<input name="lengthCm" required type="number" min="1" step="1" placeholder="Ex.: 30" /></label>
+          <label>Largura (cm)<input name="widthCm" required type="number" min="1" step="1" placeholder="Ex.: 20" /></label>
+          <label>Altura (cm)<input name="heightCm" required type="number" min="1" step="1" placeholder="Ex.: 10" /></label>
         </div>
+        <p className="settings-hint">Informe o peso e as medidas do pacote já embalado; os Correios usam esses dados na cotação.</p>
         <label>Descrição<textarea name="description" required minLength={10} maxLength={4000} rows={4} placeholder="Descreva o estado e os detalhes importantes do item." /></label>
         <label className="quick-sale-image-input"><ImagePlus size={20} /><span><strong>Fotos do item</strong><small>Escolha de 1 a 6 fotos · JPEG, PNG ou WEBP</small></span><input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => setImages(Array.from(event.target.files ?? []).slice(0, 6))} /></label>
         {images.length > 0 && <div className="quick-sale-image-list">{images.map((image) => <span key={`${image.name}-${image.lastModified}`}>{image.name}</span>)}</div>}
@@ -121,13 +130,20 @@ export function QuickSalePage() {
         const item = order.items[0];
         const canShip = order.status === "PAID";
         const canDeliver = order.status === "SHIPPED";
+        const shipments = order.shipments ?? [];
         return <article key={order.id}>
           <span className="quick-sale-order-icon"><PackageCheck /></span>
-          <div className="quick-sale-item"><strong>{item?.productName ?? "Item anunciado"}</strong><span>Comprador: {order.customer.name} · Pedido {order.status}</span><b>Líquido estimado: {formatPrice(order.sellerNet)}</b></div>
+          <div className="quick-sale-item"><strong>{item?.productName ?? "Item anunciado"}</strong><span>Comprador: {order.customer.name} · Pedido {order.status}</span>{shipments.some((shipment) => shipment.trackingCode) && <small>Rastreios: {shipments.map((shipment) => shipment.trackingCode ? `${shipment.packageLabel ?? `Pacote ${shipment.packageNumber}`}: ${shipment.trackingCode}` : null).filter(Boolean).join(" · ")}</small>}<b>Líquido estimado: {formatPrice(order.sellerNet)}</b></div>
           <span className={`status-pill quick-sale-payout-${order.quickSalePayoutStatus.toLowerCase()}`}>{order.quickSalePayoutStatus === "PAID" ? "Repasse pago" : order.quickSalePayoutStatus === "VOIDED" ? "Repasse cancelado" : "Repasse pendente"}</span>
           {canShip && <button className="button button-primary compact" onClick={() => {
-            const trackingCode = window.prompt("Informe o código de rastreio dos Correios");
-            if (trackingCode) updateOrder.mutate({ id: order.id, status: "SHIPPED", trackingCode });
+            const trackingCodes: string[] = [];
+            for (let index = 0; index < shipments.length; index += 1) {
+              const label = shipments[index]?.packageLabel ?? `Pacote ${index + 1}`;
+              const trackingCode = window.prompt(`Rastreio de "${label}" (${index + 1} de ${shipments.length})`);
+              if (!trackingCode?.trim()) return;
+              trackingCodes.push(trackingCode.trim());
+            }
+            if (trackingCodes.length) updateOrder.mutate({ id: order.id, status: "SHIPPED", trackingCodes });
           }}>Informar envio</button>}
           {canDeliver && <button className="button button-dark compact" onClick={() => updateOrder.mutate({ id: order.id, status: "DELIVERED" })}>Marcar entregue</button>}
         </article>;

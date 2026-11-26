@@ -51,7 +51,7 @@ orderRoutes.post("/payments/mercado-pago/webhook", validateBody(paymentWebhookSc
 }));
 
 orderRoutes.patch("/:id/status", authRequired, sellerRequired, validateBody(updateOrderStatusSchema), asyncHandler(async (req, res) => {
-  const result = await orderService.updateSellerOrder(req.user!.sub, String(req.params.id), req.body.status, req.body.correiosTrackingCode);
+  const result = await orderService.updateSellerOrder(req.user!.sub, String(req.params.id), req.body.status, req.body.trackingCodes);
   notifyAdminDashboard(req, "ORDER_STATUS_UPDATED");
   res.json(result);
 }));

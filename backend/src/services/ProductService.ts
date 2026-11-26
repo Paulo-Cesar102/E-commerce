@@ -22,6 +22,10 @@ type ProductInput = {
   description: string;
   price: number;
   stock: number;
+  weightGrams: number;
+  lengthCm: number;
+  widthCm: number;
+  heightCm: number;
   images?: { url: string; alt?: string }[];
   options?: { type: string; value: string }[];
   variants?: { sku: string; attributes: Record<string, string>; price?: number; stock: number }[];
@@ -186,6 +190,10 @@ export class ProductService {
       ...(input.description ? { description: input.description } : {}),
       ...(input.price !== undefined ? { price: input.price } : {}),
       ...(input.stock !== undefined ? { stock: input.stock } : {}),
+      ...(input.weightGrams !== undefined ? { weightGrams: input.weightGrams } : {}),
+      ...(input.lengthCm !== undefined ? { lengthCm: input.lengthCm } : {}),
+      ...(input.widthCm !== undefined ? { widthCm: input.widthCm } : {}),
+      ...(input.heightCm !== undefined ? { heightCm: input.heightCm } : {}),
       ...(input.status ? { status: input.status } : {}),
       ...(input.images
         ? {

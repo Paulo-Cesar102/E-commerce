@@ -5,6 +5,12 @@ const optionSchema = z.object({
   value: z.string().min(1),
 });
 const variantSchema = z.object({ sku: z.string().min(1).max(80), attributes: z.record(z.string(), z.string()), price: z.coerce.number().positive().optional(), stock: z.coerce.number().int().min(0) });
+const shippingPackageSchema = {
+  weightGrams: z.coerce.number().int().positive(),
+  lengthCm: z.coerce.number().int().positive(),
+  widthCm: z.coerce.number().int().positive(),
+  heightCm: z.coerce.number().int().positive(),
+};
 
 export const productQuerySchema = z.object({
   q: z.string().optional(),
@@ -25,6 +31,7 @@ export const createProductSchema = z.object({
   description: z.string().min(10),
   price: z.coerce.number().positive(),
   stock: z.coerce.number().int().min(0),
+  ...shippingPackageSchema,
   images: z.array(z.object({ url: z.url(), alt: z.string().optional() })).default([]),
   options: z.array(optionSchema).default([]),
   variants: z.array(variantSchema).default([]),

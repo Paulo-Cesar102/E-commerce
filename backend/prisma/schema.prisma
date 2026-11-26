@@ -213,6 +213,10 @@ model Product {
   stock       Int           @default(0)
   listingType ProductListingType @default(STORE)
   originPostalCode String?
+  weightGrams Int?
+  lengthCm Int?
+  widthCm Int?
+  heightCm Int?
   averageRating Decimal     @default(0) @db.Decimal(3, 2)
   ratingCount   Int         @default(0)
   status      ProductStatus @default(ACTIVE)
@@ -451,7 +455,7 @@ model Order {
   payment      PaymentTransaction?
   reviews      Review[]
   chat         Chat?
-  shipment     Shipment?
+  shipments    Shipment[]
   events       OrderEvent[]
   couponRedemption CouponRedemption?
 
@@ -488,14 +492,18 @@ model Shipment {
   service        String
   status         String   @default("PENDING")
   trackingCode   String?  @unique
+  packageLabel   String?
   labelUrl       String?
   quotedDays     Int?
   rawPayload     Json?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  packageNumber  Int      @default(1)
 
-  orderId String @unique
+  orderId String
   order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, packageNumber])
 }
 
 model OrderEvent {

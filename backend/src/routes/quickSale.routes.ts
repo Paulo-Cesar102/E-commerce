@@ -29,7 +29,7 @@ quickSaleRoutes.patch("/orders/:id/status", authRequired, validateBody(quickSale
     req.user!.sub,
     String(req.params.id),
     req.body.status,
-    req.body.trackingCode,
+    req.body.trackingCodes,
   ));
 }));
 

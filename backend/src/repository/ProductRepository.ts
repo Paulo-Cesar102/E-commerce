@@ -7,6 +7,10 @@ type ProductInput = {
   description: string;
   price: number;
   stock: number;
+  weightGrams: number;
+  lengthCm: number;
+  widthCm: number;
+  heightCm: number;
   images?: { url: string; alt?: string }[];
   options?: { type: string; value: string }[];
   variants?: { sku: string; attributes: Record<string, string>; price?: number; stock: number }[];
@@ -158,6 +162,10 @@ export class ProductRepository {
         description: input.description,
         price: input.price,
         stock: input.stock,
+        weightGrams: input.weightGrams,
+        lengthCm: input.lengthCm,
+        widthCm: input.widthCm,
+        heightCm: input.heightCm,
         images: { create: input.images?.map((image, position) => ({ ...image, position })) ?? [] },
         options: { create: input.options ?? [] }, variants: { create: input.variants ?? [] },
       },

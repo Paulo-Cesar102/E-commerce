@@ -33,6 +33,10 @@ export type Product = {
   status?: "ACTIVE" | "INACTIVE";
   listingType?: "STORE" | "QUICK_SALE";
   originPostalCode?: string | null;
+  weightGrams?: number | null;
+  lengthCm?: number | null;
+  widthCm?: number | null;
+  heightCm?: number | null;
   categoryId: string;
   sellerId: string | null;
   category?: Category;
@@ -97,7 +101,7 @@ export type Order = {
   correiosTrackingCode?: string;
   platformFee?: string | number;
   quickSalePayoutStatus?: "NOT_APPLICABLE" | "PENDING" | "PAID" | "VOIDED";
-  shipment?: { provider: string; service: string; status: string; trackingCode?: string; quotedDays?: number };
+  shipments?: Array<{ id: string; packageNumber: number; packageLabel?: string | null; provider: string; service: string; status: string; trackingCode?: string | null; quotedDays?: number | null }>;
   mercadoPagoPreference?: string;
   createdAt: string;
   items: Array<{

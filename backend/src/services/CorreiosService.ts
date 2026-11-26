@@ -2,7 +2,18 @@ import { env } from "../config/env.js";
 import { AppError } from "../errors/AppError.js";
 
 export type ShippingQuote = { provider: string; service: string; price: number; deliveryDays: number; rawPayload?: unknown };
-type QuoteInput = { fromPostalCode: string; toPostalCode: string; items: { quantity: number; unitPrice: number }[] };
+type QuoteInput = {
+  fromPostalCode: string;
+  toPostalCode: string;
+  items: {
+    quantity: number;
+    unitPrice: number;
+    weightGrams: number;
+    lengthCm: number;
+    widthCm: number;
+    heightCm: number;
+  }[];
+};
 
 /** Adapter for the Correios contract/API gateway. It deliberately never invents a shipping price. */
 export class CorreiosService {

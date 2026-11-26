@@ -25,7 +25,7 @@ privacyRoutes.post("/consents", validateBody(consentSchema), asyncHandler(async 
 
 privacyRoutes.get("/export", asyncHandler(async (req, res) => {
   const userId = req.user!.sub;
-  const data = await prisma.user.findUnique({ where: { id: userId }, include: { addresses: true, orders: { include: { items: true, payment: true, shipment: true } }, wishlistItems: { include: { product: true } }, consents: true } });
+  const data = await prisma.user.findUnique({ where: { id: userId }, include: { addresses: true, orders: { include: { items: true, payment: true, shipments: { orderBy: { packageNumber: "asc" } } } }, wishlistItems: { include: { product: true } }, consents: true } });
   res.json(data);
 }));
 

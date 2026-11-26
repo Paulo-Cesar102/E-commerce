@@ -24,6 +24,10 @@ export class QuickSaleRepository {
     description: string;
     price: number;
     originPostalCode: string;
+    weightGrams: number;
+    lengthCm: number;
+    widthCm: number;
+    heightCm: number;
     images: { url: string; alt?: string }[];
   }, unlimited: boolean) {
     return prisma.$transaction(async (tx) => {
@@ -43,6 +47,10 @@ export class QuickSaleRepository {
           price: input.price,
           stock: 1,
           originPostalCode: input.originPostalCode,
+          weightGrams: input.weightGrams,
+          lengthCm: input.lengthCm,
+          widthCm: input.widthCm,
+          heightCm: input.heightCm,
           images: { create: input.images.map((image, position) => ({ ...image, position })) },
         },
         include: { category: true, images: { orderBy: { position: "asc" } } },
@@ -90,7 +98,7 @@ export class QuickSaleRepository {
         customer: { select: { name: true } },
         items: { include: { product: { include: { images: { take: 1, orderBy: { position: "asc" } } } } } },
         payment: true,
-        shipment: true,
+        shipments: { orderBy: { packageNumber: "asc" } },
       },
       orderBy: { createdAt: "desc" },
       take: 100,
@@ -104,7 +112,7 @@ export class QuickSaleRepository {
   findOwnedSaleOrder(tx: Prisma.TransactionClient, orderId: string, userId: string) {
     return tx.order.findFirst({
       where: { id: orderId, directSellerUserId: userId },
-      include: { payment: true, items: true, shipment: true },
+      include: { payment: true, items: true, shipments: { orderBy: { packageNumber: "asc" } } },
     });
   }
 
@@ -113,7 +121,7 @@ export class QuickSaleRepository {
     fromStatus: "PAID" | "SHIPPED";
     toStatus: "SHIPPED" | "DELIVERED";
     userId: string;
-    trackingCode?: string;
+    trackingCodes?: string[];
   }) {
     return this.transitionSaleOrderInTransaction(tx, input);
   }
@@ -123,23 +131,23 @@ export class QuickSaleRepository {
     fromStatus: "PAID" | "SHIPPED";
     toStatus: "SHIPPED" | "DELIVERED";
     userId: string;
-    trackingCode?: string;
+    trackingCodes?: string[];
   }) {
     const updated = await tx.order.updateMany({
       where: { id: input.orderId, directSellerUserId: input.userId, status: input.fromStatus },
       data: {
         status: input.toStatus,
-        ...(input.trackingCode ? { correiosTrackingCode: input.trackingCode } : {}),
+        ...(input.trackingCodes?.[0] ? { correiosTrackingCode: input.trackingCodes[0] } : {}),
       },
     });
     if (updated.count !== 1) throw new AppError(409, "A venda foi atualizada por outra solicitacao");
     if (input.toStatus === "SHIPPED") {
-      await tx.shipment.update({
-        where: { orderId: input.orderId },
-        data: { status: "SHIPPED", ...(input.trackingCode ? { trackingCode: input.trackingCode } : {}) },
-      });
+      await Promise.all((input.trackingCodes ?? []).map((trackingCode, index) => tx.shipment.update({
+        where: { orderId_packageNumber: { orderId: input.orderId, packageNumber: index + 1 } },
+        data: { status: "SHIPPED", trackingCode },
+      })));
     } else {
-      await tx.shipment.update({ where: { orderId: input.orderId }, data: { status: "DELIVERED" } });
+      await tx.shipment.updateMany({ where: { orderId: input.orderId }, data: { status: "DELIVERED" } });
     }
     await tx.orderEvent.create({
       data: {
@@ -152,7 +160,7 @@ export class QuickSaleRepository {
     });
     return tx.order.findUnique({
       where: { id: input.orderId },
-      include: { items: true, payment: true, shipment: true },
+      include: { items: true, payment: true, shipments: { orderBy: { packageNumber: "asc" } } },
     });
   }
 

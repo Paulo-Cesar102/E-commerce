@@ -19,5 +19,12 @@ export const paymentWebhookSchema = z.object({
 
 export const updateOrderStatusSchema = z.object({
   status: z.enum(["PREPARING", "SHIPPED", "DELIVERED", "CANCELED", "REFUNDED"]),
-  correiosTrackingCode: z.string().optional(),
+  trackingCodes: z.array(z.string().trim().min(5).max(40)).min(1).optional(),
+}).superRefine((value, context) => {
+  if (value.status === "SHIPPED" && !value.trackingCodes?.length) {
+    context.addIssue({ code: "custom", path: ["trackingCodes"], message: "Informe o codigo de rastreio de cada pacote" });
+  }
+  if (value.trackingCodes && new Set(value.trackingCodes).size !== value.trackingCodes.length) {
+    context.addIssue({ code: "custom", path: ["trackingCodes"], message: "Os codigos de rastreio devem ser diferentes" });
+  }
 });

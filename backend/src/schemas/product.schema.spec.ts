@@ -1,4 +1,33 @@
-import { productQuerySchema } from "./product.schema.js";
+import { createProductSchema, productQuerySchema } from "./product.schema.js";
+
+describe("createProductSchema shipping package", () => {
+  const product = {
+    categoryId: "4e4b4967-68ae-4a2d-bdef-a7a98fe0ea04",
+    name: "Produto de teste",
+    description: "Descricao valida para produto de teste",
+    price: 10,
+    stock: 1,
+    weightGrams: "1200",
+    lengthCm: "30",
+    widthCm: "20",
+    heightCm: "10",
+  };
+
+  it("parses package measurements as positive integers", () => {
+    expect(createProductSchema.parse(product)).toMatchObject({
+      weightGrams: 1200,
+      lengthCm: 30,
+      widthCm: 20,
+      heightCm: 10,
+    });
+  });
+
+  it("rejects missing or non-positive package measurements", () => {
+    expect(createProductSchema.safeParse({ ...product, weightGrams: 0 }).success).toBe(false);
+    const { weightGrams: _weight, ...withoutWeight } = product;
+    expect(createProductSchema.safeParse(withoutWeight).success).toBe(false);
+  });
+});
 
 describe("productQuerySchema pagination", () => {
   it("uses a bounded default page and result size", () => {

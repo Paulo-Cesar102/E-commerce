@@ -15,6 +15,10 @@ type QuickSaleInput = {
   description: string;
   price: number;
   originPostalCode: string;
+  weightGrams: number;
+  lengthCm: number;
+  widthCm: number;
+  heightCm: number;
   images: { url: string; alt?: string }[];
 };
 
@@ -66,7 +70,7 @@ export class QuickSaleService {
     userId: string,
     orderId: string,
     status: "SHIPPED" | "DELIVERED",
-    trackingCode?: string,
+    trackingCodes?: string[],
   ) {
     return this.repository.transaction(async (tx) => {
       const order = await this.repository.findOwnedSaleOrder(tx, orderId, userId);
@@ -74,7 +78,9 @@ export class QuickSaleService {
       if (order.payment?.status !== "APPROVED") throw new AppError(409, "A venda ainda nao foi paga");
       if (status === "SHIPPED") {
         if (order.status !== "PAID") throw new AppError(409, "Apenas vendas pagas podem ser enviadas");
-        if (!trackingCode) throw new AppError(400, "Informe o codigo de rastreio");
+        if (trackingCodes?.length !== order.shipments.length) {
+          throw new AppError(400, `Informe um codigo de rastreio para cada pacote (${order.shipments.length})`);
+        }
       } else if (order.status !== "SHIPPED") {
         throw new AppError(409, "A venda precisa estar enviada antes de ser marcada como entregue");
       }
@@ -83,7 +89,7 @@ export class QuickSaleService {
         fromStatus: status === "SHIPPED" ? "PAID" : "SHIPPED",
         toStatus: status,
         userId,
-        ...(trackingCode ? { trackingCode } : {}),
+        ...(trackingCodes ? { trackingCodes } : {}),
       });
     });
   }

@@ -84,6 +84,26 @@ export class OrderService {
 
       for (const [sellerIndex, group] of sellerEntries.entries()) {
         const { sellerId, directSellerUserId, items } = group;
+        const quoteItems = items.map((item) => {
+          const { weightGrams, lengthCm, widthCm, heightCm } = item.product;
+          if (
+            typeof weightGrams !== "number" || !Number.isInteger(weightGrams) || weightGrams <= 0 ||
+            typeof lengthCm !== "number" || !Number.isInteger(lengthCm) || lengthCm <= 0 ||
+            typeof widthCm !== "number" || !Number.isInteger(widthCm) || widthCm <= 0 ||
+            typeof heightCm !== "number" || !Number.isInteger(heightCm) || heightCm <= 0
+          ) {
+            throw new AppError(422, `Informe peso e dimensoes de envio para o produto "${item.product.name}" antes de finalizar a compra`);
+          }
+          return {
+            quantity: item.quantity,
+            unitPrice: Number(item.variant?.price ?? item.product.price),
+            packageLabel: item.product.name,
+            weightGrams,
+            lengthCm,
+            widthCm,
+            heightCm,
+          };
+        });
         await this.stockService.reserve(
           tx,
           items.map((item) => ({ productId: item.productId, variantId: item.variantId, quantity: item.quantity })),
@@ -91,25 +111,52 @@ export class OrderService {
 
         const origin = items[0]?.product.seller?.postalCode ?? items[0]?.product.originPostalCode;
         if (!origin) throw new AppError(422, "A loja ainda nao configurou o CEP de origem para entrega");
-        const quote = await this.correios.quote({ fromPostalCode: origin, toPostalCode: address.postalCode, items: items.map((item) => ({ quantity: item.quantity, unitPrice: Number(item.variant?.price ?? item.product.price) })) });
+        const packageQuotes = await Promise.all(quoteItems.map(async (item) => ({
+          quantity: item.quantity,
+          packageLabel: item.packageLabel,
+          quote: await this.correios.quote({
+            fromPostalCode: origin,
+            toPostalCode: address.postalCode,
+            items: [{
+              quantity: 1,
+              unitPrice: item.unitPrice,
+              weightGrams: item.weightGrams,
+              lengthCm: item.lengthCm,
+              widthCm: item.widthCm,
+              heightCm: item.heightCm,
+            }],
+          }),
+        })));
+        const shippingCost = Math.round(packageQuotes.reduce((sum, item) => sum + item.quote.price * item.quantity, 0) * 100) / 100;
+        const deliveryDays = Math.max(...packageQuotes.map((item) => item.quote.deliveryDays));
+        const shippingServices = [...new Set(packageQuotes.map((item) => item.quote.service))];
+        const shipments = packageQuotes.flatMap(({ quantity, packageLabel, quote }) =>
+          Array.from({ length: quantity }, (_, index) => ({
+            provider: quote.provider,
+            service: quote.service,
+            quotedDays: quote.deliveryDays,
+            packageLabel: quantity > 1 ? `${packageLabel} - unidade ${index + 1}` : packageLabel,
+            ...(quote.rawPayload === undefined ? {} : { rawPayload: quote.rawPayload as object }),
+          })),
+        ).map((shipment, index) => ({ ...shipment, packageNumber: index + 1 }));
         const subtotal = items.reduce((sum, item) => sum + Number(item.variant?.price ?? item.product.price) * item.quantity, 0);
         const discount = sellerIndex === sellerEntries.length - 1 ? discountTotal - discountAllocated : Math.round(discountTotal * subtotal / subtotalTotal * 100) / 100;
         discountAllocated += discount;
         const platformFee = directSellerUserId
           ? calculateQuickSaleCommission(subtotal - discount)
           : Math.round((subtotal - discount) * env.PLATFORM_FEE_PERCENT) / 100;
-        const total = subtotal + quote.price - discount;
-        const deliveryEstimateDate = new Date(); deliveryEstimateDate.setDate(deliveryEstimateDate.getDate() + quote.deliveryDays);
+        const total = Math.round((subtotal + shippingCost - discount) * 100) / 100;
+        const deliveryEstimateDate = new Date(); deliveryEstimateDate.setDate(deliveryEstimateDate.getDate() + deliveryDays);
         const createdOrder = await this.orderRepository.createOrder(tx, {
           checkoutId,
           customerId: userId,
           ...(sellerId ? { sellerId } : {}),
           ...(directSellerUserId ? { directSellerUserId, quickSalePayout: true } : {}),
-          subtotal, shippingCost: quote.price, discount, platformFee,
+          subtotal, shippingCost, discount, platformFee,
           total,
-          shippingMethod: quote.service,
+          shippingMethod: shippingServices.join(" + "),
           shippingAddress: { recipient: address.recipient, document: address.document, postalCode: address.postalCode, street: address.street, number: address.number, complement: address.complement, district: address.district, city: address.city, state: address.state },
-          shipment: { provider: quote.provider, service: quote.service, quotedDays: quote.deliveryDays, ...(quote.rawPayload === undefined ? {} : { rawPayload: quote.rawPayload as object }) },
+          shipments,
           deliveryEstimateDate,
           items: items.map((item) => ({
             productId: item.productId,
@@ -261,7 +308,7 @@ export class OrderService {
     return typeof paymentId === "string" || typeof paymentId === "number" ? String(paymentId) : null;
   }
 
-  async updateSellerOrder(userId: string, orderId: string, status: "PREPARING" | "SHIPPED" | "DELIVERED" | "CANCELED" | "REFUNDED", correiosTrackingCode?: string) {
+  async updateSellerOrder(userId: string, orderId: string, status: "PREPARING" | "SHIPPED" | "DELIVERED" | "CANCELED" | "REFUNDED", trackingCodes?: string[]) {
     const seller = await this.orderRepository.findSellerByUserId(userId);
     if (!seller) {
       throw new AppError(403, "Vendedor nao encontrado");
@@ -276,7 +323,9 @@ export class OrderService {
 
       const allowed: Record<string, string[]> = { PAID: ["PREPARING", "CANCELED"], PREPARING: ["SHIPPED", "CANCELED"], SHIPPED: ["DELIVERED"] };
       if (!(allowed[order.status] ?? []).includes(status)) throw new AppError(409, `Transicao invalida de ${order.status} para ${status}`);
-      if (status === "SHIPPED" && !correiosTrackingCode) throw new AppError(400, "Codigo de rastreio e obrigatorio ao enviar o pedido");
+      if (status === "SHIPPED" && trackingCodes?.length !== order.shipments.length) {
+        throw new AppError(400, `Informe um codigo de rastreio para cada pacote (${order.shipments.length})`);
+      }
       if (status === "CANCELED" && order.status !== "PAID") throw new AppError(409, "Cancelamento pelo vendedor so e permitido antes do preparo");
       if (status === "CANCELED") {
         if (!order.payment?.providerRef) throw new AppError(409, "Pagamento ainda nao esta pronto para estorno");
@@ -288,7 +337,7 @@ export class OrderService {
       }
 
       const target = status === "CANCELED" ? "REFUNDED" : status;
-      return this.orderRepository.transitionOrder(tx, { orderId, fromStatus: order.status, toStatus: target, userId, type: "SELLER_STATUS_CHANGE", ...(correiosTrackingCode ? { trackingCode: correiosTrackingCode } : {}) });
+      return this.orderRepository.transitionOrder(tx, { orderId, fromStatus: order.status, toStatus: target, userId, type: "SELLER_STATUS_CHANGE", ...(trackingCodes ? { trackingCodes } : {}) });
     });
   }
 

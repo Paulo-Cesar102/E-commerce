@@ -10,7 +10,7 @@ export class OrderRepository {
       include: {
         items: { include: { product: { include: { images: { take: 1 } } }, variant: true } },
         payment: true,
-        shipment: true,
+        shipments: { orderBy: { packageNumber: "asc" } },
         seller: { select: { id: true, storeName: true } },
         events: { orderBy: { createdAt: "desc" } },
         directSeller: { select: { id: true, name: true } },
@@ -93,7 +93,7 @@ export class OrderRepository {
       total: number;
       shippingMethod: string;
       shippingAddress: object;
-      shipment: { provider: string; service: string; quotedDays: number; rawPayload?: object };
+      shipments: { provider: string; service: string; quotedDays: number; packageNumber: number; packageLabel?: string; rawPayload?: object }[];
       deliveryEstimateDate: Date;
       quickSalePayout?: boolean;
       items: { productId: string; variantId?: string | null; quantity: number; unitPrice: Prisma.Decimal | string | number; productName: string; productSku?: string; imageUrl?: string }[];
@@ -121,10 +121,10 @@ export class OrderRepository {
           })),
         },
         payment: { create: { status: "PENDING" } },
-        shipment: { create: input.shipment },
+        shipments: { create: input.shipments },
         events: { create: { type: "CREATED", toStatus: "PENDING_PAYMENT" } },
       },
-      include: { items: { include: { product: true } }, payment: true },
+      include: { items: { include: { product: true } }, payment: true, shipments: { orderBy: { packageNumber: "asc" } } },
     });
   }
 
@@ -171,7 +171,7 @@ export class OrderRepository {
       })));
       return tx.order.findMany({
         where: { checkoutId },
-        include: { payment: true, items: true },
+        include: { payment: true, items: true, shipments: { orderBy: { packageNumber: "asc" } } },
         orderBy: { createdAt: "asc" },
       });
     });
@@ -238,23 +238,32 @@ export class OrderRepository {
   findSellerOrderWithItems(tx: PrismaTransaction, sellerId: string, orderId: string) {
     return tx.order.findFirst({
       where: { id: orderId, sellerId },
-      include: { items: true, payment: true },
+      include: { items: true, payment: true, shipments: { orderBy: { packageNumber: "asc" } } },
     });
   }
 
   updateSellerOrderStatus(
     tx: PrismaTransaction,
     orderId: string,
-    data: { status: "PREPARING" | "SHIPPED" | "DELIVERED" | "CANCELED" | "REFUNDED"; correiosTrackingCode?: string },
+    data: { status: "PREPARING" | "SHIPPED" | "DELIVERED" | "CANCELED" | "REFUNDED"; trackingCodes?: string[] },
   ) {
     return tx.order.update({
       where: { id: orderId },
       data: {
         status: data.status,
-        ...(data.correiosTrackingCode ? { correiosTrackingCode: data.correiosTrackingCode } : {}),
-        ...(data.correiosTrackingCode ? { shipment: { update: { trackingCode: data.correiosTrackingCode, ...(data.status === "SHIPPED" ? { status: "SHIPPED" } : {}) } } } : {}),
+        ...(data.trackingCodes?.[0] ? { correiosTrackingCode: data.trackingCodes[0] } : {}),
+        ...(data.trackingCodes?.length
+          ? {
+              shipments: {
+                update: data.trackingCodes.map((trackingCode, index) => ({
+                  where: { orderId_packageNumber: { orderId, packageNumber: index + 1 } },
+                  data: { trackingCode, ...(data.status === "SHIPPED" ? { status: "SHIPPED" } : {}) },
+                })),
+              },
+            }
+          : {}),
       },
-      include: { items: true, payment: true },
+      include: { items: true, payment: true, shipments: { orderBy: { packageNumber: "asc" } } },
     });
   }
 
@@ -273,11 +282,26 @@ export class OrderRepository {
     return prisma.order.findMany({ where: { status: "PENDING_PAYMENT", createdAt: { lt: before } }, select: { id: true } });
   }
 
-  async transitionOrder(tx: PrismaTransaction, input: { orderId: string; fromStatus: "PENDING_PAYMENT" | "PAID" | "PREPARING" | "SHIPPED" | "DELIVERED" | "CANCELED" | "REFUNDED" | "RETURN_REQUESTED"; toStatus: "PENDING_PAYMENT" | "PAID" | "PREPARING" | "SHIPPED" | "DELIVERED" | "CANCELED" | "REFUNDED" | "RETURN_REQUESTED"; userId?: string; type: string; metadata?: object; trackingCode?: string }) {
-    const result = await tx.order.updateMany({ where: { id: input.orderId, status: input.fromStatus }, data: { status: input.toStatus, ...(input.trackingCode ? { correiosTrackingCode: input.trackingCode } : {}) } });
+  async transitionOrder(tx: PrismaTransaction, input: { orderId: string; fromStatus: "PENDING_PAYMENT" | "PAID" | "PREPARING" | "SHIPPED" | "DELIVERED" | "CANCELED" | "REFUNDED" | "RETURN_REQUESTED"; toStatus: "PENDING_PAYMENT" | "PAID" | "PREPARING" | "SHIPPED" | "DELIVERED" | "CANCELED" | "REFUNDED" | "RETURN_REQUESTED"; userId?: string; type: string; metadata?: object; trackingCodes?: string[] }) {
+    const result = await tx.order.updateMany({
+      where: { id: input.orderId, status: input.fromStatus },
+      data: {
+        status: input.toStatus,
+        ...(input.trackingCodes?.[0] ? { correiosTrackingCode: input.trackingCodes[0] } : {}),
+      },
+    });
     if (result.count !== 1) throw new Error("ORDER_TRANSITION_CONFLICT");
+    if (input.toStatus === "SHIPPED" && input.trackingCodes) {
+      await Promise.all(input.trackingCodes.map((trackingCode, index) => tx.shipment.update({
+        where: { orderId_packageNumber: { orderId: input.orderId, packageNumber: index + 1 } },
+        data: { trackingCode, status: "SHIPPED" },
+      })));
+    }
+    if (input.toStatus === "DELIVERED") {
+      await tx.shipment.updateMany({ where: { orderId: input.orderId }, data: { status: "DELIVERED" } });
+    }
     await tx.orderEvent.create({ data: { orderId: input.orderId, type: input.type, fromStatus: input.fromStatus, toStatus: input.toStatus, ...(input.userId ? { userId: input.userId } : {}), ...(input.metadata ? { metadata: input.metadata } : {}) } });
-    return tx.order.findUnique({ where: { id: input.orderId }, include: { items: true, payment: true, shipment: true } });
+    return tx.order.findUnique({ where: { id: input.orderId }, include: { items: true, payment: true, shipments: { orderBy: { packageNumber: "asc" } } } });
   }
 
   findOrderItems(orderId: string) {
