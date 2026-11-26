@@ -4,7 +4,7 @@ import { validateBody, validateQuery } from "../middlewares/validate.js";
 import { createProductSchema, productQuerySchema, reviewSchema, updateProductSchema } from "../schemas/product.schema.js";
 import { ProductService } from "../services/ProductService.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { uploadProductImages } from "../middlewares/upload.js";
+import { uploadProductImages, verifyUploadedImageContent } from "../middlewares/upload.js";
 import { FileStorageService } from "../services/FileStorageService.js";
 
 export const productRoutes = Router();
@@ -22,7 +22,7 @@ productRoutes.get("/stores/:sellerId", asyncHandler(async (req, res) => {
   res.json(await productService.store(String(req.params.sellerId)));
 }));
 
-productRoutes.post("/uploads", authRequired, sellerRequired, sellerVerificationRequired, uploadProductImages, asyncHandler(async (req, res) => {
+productRoutes.post("/uploads", authRequired, sellerRequired, sellerVerificationRequired, uploadProductImages, verifyUploadedImageContent, asyncHandler(async (req, res) => {
   const files = req.files as Express.Multer.File[];
   const storage = new FileStorageService();
   res.status(201).json({ images: await storage.uploadProductFiles(files, `${req.protocol}://${req.get("host")}`) });

@@ -11,6 +11,9 @@ import { AppError } from "../errors/AppError.js";
 import { env } from "../config/env.js";
 import { QuickSaleRepository } from "../repository/QuickSaleRepository.js";
 import { AdminReturnService } from "../services/AdminReturnService.js";
+import { privateKycDirectory } from "../middlewares/kycUpload.js";
+import fs from "node:fs";
+import path from "node:path";
 
 const notifyAdminDashboard = (req: Request, type: string) => {
   req.app.locals.io?.to("admin:dashboard").emit("admin:refresh", { type });
@@ -63,6 +66,18 @@ const returnResolutionSchema = z.object({
 
 export const adminRoutes = Router();
 adminRoutes.use(authRequired, adminRequired);
+
+adminRoutes.get("/kyc/:sellerId/document", asyncHandler(async (req, res) => {
+  const seller = await prisma.sellerProfile.findUnique({ where: { id: String(req.params.sellerId) }, select: { document: true, storeName: true } });
+  if (!seller?.document) throw new AppError(404, "Documento de KYC nao encontrado");
+  const filename = path.basename(seller.document);
+  const filePath = path.resolve(privateKycDirectory, filename);
+  if (!filePath.startsWith(path.resolve(privateKycDirectory) + path.sep) || !fs.existsSync(filePath)) throw new AppError(404, "Documento de KYC nao encontrado");
+  res.setHeader("Content-Disposition", `attachment; filename="kyc-${String(req.params.sellerId)}${path.extname(filename)}"`);
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.type(path.extname(filename) === ".pdf" ? "application/pdf" : "application/octet-stream");
+  res.sendFile(filePath);
+}));
 const quickSaleRepository = new QuickSaleRepository();
 const adminReturnService = new AdminReturnService();
 
@@ -150,8 +165,9 @@ adminRoutes.get("/seller-withdrawals", asyncHandler(async (_req, res) => {
   res.json(withdrawals);
 }));
 adminRoutes.patch("/kyc/:sellerId", validateBody(kycSchema), asyncHandler(async (req, res) => {
-  const result = await prisma.sellerProfile.update({ where: { id: String(req.params.sellerId) }, data: { approvalStatus: req.body.approvalStatus, kycReviewNote: req.body.kycReviewNote, kycReviewedAt: new Date() } });
+  const result = await prisma.sellerProfile.update({ where: { id: String(req.params.sellerId) }, data: { approvalStatus: req.body.approvalStatus, kycReviewNote: req.body.kycReviewNote, kycReviewedAt: new Date() }, include: { user: { select: { id: true } } } });
   await prisma.auditLog.create({ data: { userId: req.user!.sub, action: `KYC_${req.body.approvalStatus}`, entityType: "SellerProfile", entityId: result.id, metadata: { note: req.body.kycReviewNote } } });
+  await prisma.notification.create({ data: { userId: result.user.id, type: "KYC_UPDATED", title: "Analise da loja atualizada", body: req.body.kycReviewNote ?? `Status: ${req.body.approvalStatus}`, data: { status: req.body.approvalStatus } } });
   notifyAdminDashboard(req, "KYC_UPDATED");
   res.json(result);
 }));

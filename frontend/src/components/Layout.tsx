@@ -14,13 +14,23 @@ import { AdminCommandBar, type AdminTab } from "./AdminCommandBar";
 import { AdminReturnsPanel } from "./AdminReturnsPanel";
 import { AdminCouponsPanel } from "./AdminCouponsPanel";
 
+let initialRefresh: Promise<string | null> | null = null;
+function refreshFromCookie() {
+  if (!initialRefresh) {
+    initialRefresh = api<{ accessToken: string }>("/auth/refresh", { method: "POST", auth: false, retry: false, body: "{}" })
+      .then((session) => session.accessToken)
+      .catch(() => null);
+  }
+  return initialRefresh;
+}
+
 export function Layout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [adminTab, setAdminTab] = useState<AdminTab>("overview");
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, accessToken, updateUser, logout } = useAuthStore();
+  const { user, accessToken, updateUser, updateAccessToken, finishInitialization, logout } = useAuthStore();
   const { theme, toggleTheme } = useThemeStore();
   const { data: categories = [] } = useQuery({
     queryKey: ["categories"],
@@ -40,9 +50,27 @@ export function Layout({ children }: { children: ReactNode }) {
   const cartCount = cart?.items.reduce((total, item) => total + item.quantity, 0) ?? 0;
 
   useEffect(() => {
-    if (!accessToken) return;
-    void api<{ user: typeof user }>("/auth/me").then((response) => { if (response.user) updateUser(response.user); }).catch(() => undefined);
-  }, [accessToken, updateUser]);
+    let active = true;
+    void (async () => {
+      try {
+        const token = accessToken ?? await refreshFromCookie();
+        if (!token) throw new Error("No active refresh session");
+        if (!accessToken) updateAccessToken(token);
+        const response = await api<{ user: typeof user }>("/auth/me");
+        if (active && response.user) updateUser(response.user);
+      } catch {
+        if (active) logout();
+      } finally {
+        if (active) finishInitialization();
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  async function endSession() {
+    try { await api("/auth/logout", { method: "POST", auth: false, retry: false }); } catch { /* always clear the in-memory session */ }
+    logout();
+  }
 
   function submitSearch(event: FormEvent) {
     event.preventDefault();
@@ -95,7 +123,9 @@ export function Layout({ children }: { children: ReactNode }) {
                   <Link to="/chat">Mensagens</Link>
                   {user.role !== "CUSTOMER" && <Link to="/dashboard">Painel da loja</Link>}
                   {user.role === "ADMIN" && <Link to="/admin">Administração</Link>}
-                  <button onClick={logout}>Sair</button>
+                  <Link to="/conta/privacidade">Privacidade e conta</Link>
+                  <Link to="/enderecos">Endereços</Link>
+                  <button onClick={() => void endSession()}>Sair</button>
                 </div>
               </div>
             ) : (

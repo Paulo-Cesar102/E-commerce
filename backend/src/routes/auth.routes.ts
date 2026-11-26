@@ -7,6 +7,7 @@ import rateLimit from "express-rate-limit";
 import { env } from "../config/env.js";
 import { authRequired } from "../middlewares/auth.js";
 import prisma from "../../prisma/prisma.js";
+import { AppError } from "../errors/AppError.js";
 
 export const authRoutes = Router();
 const authService = new AuthService();
@@ -58,7 +59,7 @@ authRoutes.post(
   validateBody(refreshSchema),
   asyncHandler(async (req, res) => {
     const token = req.body.refreshToken ?? readCookie(req.header("cookie"));
-    if (!token) throw new Error("Refresh token ausente");
+    if (!token) throw new AppError(401, "Sessao expirada");
     const session = await authService.refresh(token);
     res.cookie(refreshCookie, session.refreshToken, cookieOptions).json({ accessToken: session.accessToken });
   }),

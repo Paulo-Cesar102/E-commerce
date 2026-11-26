@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { authRequired } from "../middlewares/auth.js";
-import { uploadProductImages } from "../middlewares/upload.js";
+import { uploadProductImages, verifyUploadedImageContent } from "../middlewares/upload.js";
 import { validateBody } from "../middlewares/validate.js";
 import { createQuickSaleSchema, quickSaleListingStatusSchema, quickSaleOrderStatusSchema, quickSaleVerificationSchema } from "../schemas/quickSale.schema.js";
 import { FileStorageService } from "../services/FileStorageService.js";
@@ -23,7 +23,7 @@ quickSaleRoutes.post("/verification", authRequired, validateBody(quickSaleVerifi
 quickSaleRoutes.post("/uploads", authRequired, asyncHandler(async (req, _res, next) => {
   await quickSaleService.assertVerified(req.user!.sub);
   next();
-}), uploadProductImages, asyncHandler(async (req, res) => {
+}), uploadProductImages, verifyUploadedImageContent, asyncHandler(async (req, res) => {
   const files = req.files as Express.Multer.File[];
   const storage = new FileStorageService();
   res.status(201).json({ images: await storage.uploadProductFiles(files, `${req.protocol}://${req.get("host")}`) });

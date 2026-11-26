@@ -24,6 +24,8 @@ type SessionUser = {
   role: "CUSTOMER" | "SELLER" | "ADMIN";
 };
 
+const TERMS_VERSION = "2026-11-26";
+
 export class AuthService {
   private readonly googleClient = new OAuth2Client();
 
@@ -71,7 +73,7 @@ export class AuthService {
         : {}),
     };
 
-    const user = await this.authRepository.createUser(data);
+    const user = await this.authRepository.createUser(data, { type: "TERMS_OF_SERVICE", version: TERMS_VERSION });
 
     if (input.role === "SELLER") {
       const admins = await prisma.user.findMany({ where: { role: "ADMIN" }, select: { id: true } });
@@ -127,7 +129,7 @@ export class AuthService {
         email,
         password,
         role: "CUSTOMER",
-      });
+      }, { type: "TERMS_OF_SERVICE", version: TERMS_VERSION });
     }
 
     await this.authRepository.markEmailVerified(user.id);
@@ -171,7 +173,6 @@ export class AuthService {
   async resetPassword(token: string, password: string) {
     const reset = await this.authRepository.findPasswordResetToken(this.hashToken(token));
     if (!reset || reset.usedAt || reset.expiresAt < new Date()) throw new AppError(400, "Token de recuperacao invalido ou expirado");
-    await this.authRepository.updatePassword(reset.userId, await bcrypt.hash(password, 12));
-    await this.authRepository.consumePasswordResetToken(reset.id);
+    await this.authRepository.completePasswordReset(reset.id, reset.userId, await bcrypt.hash(password, 12));
   }
 }

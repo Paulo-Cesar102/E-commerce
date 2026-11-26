@@ -29,14 +29,14 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
   if (auth !== false && accessToken) {
     headers.Authorization = `Bearer ${accessToken}`;
   }
-  if (!isFormData) headers["Content-Type"] = "application/json";
+  if (!isFormData && body !== undefined) headers["Content-Type"] = "application/json";
 
   try {
     const response = await http.request<T>({
       ...requestOptions,
       url: path,
       headers,
-      data: body ? JSON.parse(String(body)) : requestOptions.data,
+      data: body !== undefined ? JSON.parse(String(body)) : requestOptions.data,
     });
     return response.data;
   } catch (caught) {
