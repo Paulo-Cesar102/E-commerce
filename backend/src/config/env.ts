@@ -3,6 +3,8 @@ import { z } from "zod";
 
 dotenv.config();
 
+const optionalTrimmed = z.string().trim().optional().transform((value) => value || undefined);
+
 const envSchema = z.object({
   NODE_ENV: z.string().default("development"),
   PORT: z.coerce.number().default(3000),
@@ -10,6 +12,11 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(32),
   QUICK_SALE_CPF_HASH_SECRET: z.string().min(32).optional(),
   GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+  RESEND_API_KEY: optionalTrimmed,
+  EMAIL_FROM: optionalTrimmed,
+  CLAMAV_HOST: optionalTrimmed,
+  CLAMAV_PORT: z.coerce.number().int().min(1).max(65535).default(3310),
+  CLAMAV_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(15000),
   JWT_EXPIRES_IN: z.string().default("15m"),
   REFRESH_TOKEN_EXPIRES_DAYS: z.coerce.number().default(7),
   TRUST_PROXY: z.coerce.boolean().default(false),
@@ -36,9 +43,10 @@ const envSchema = z.object({
 export const env = envSchema.parse(process.env);
 
 if (env.NODE_ENV === "production") {
-  const required = ["CORS_ORIGIN", "MERCADO_PAGO_ACCESS_TOKEN", "MERCADO_PAGO_WEBHOOK_SECRET", "API_PUBLIC_URL", "CORREIOS_QUOTE_URL", "CORREIOS_API_TOKEN", "QUICK_SALE_CPF_HASH_SECRET"] as const;
+  const required = ["CORS_ORIGIN", "MERCADO_PAGO_ACCESS_TOKEN", "MERCADO_PAGO_WEBHOOK_SECRET", "API_PUBLIC_URL", "CORREIOS_QUOTE_URL", "CORREIOS_API_TOKEN", "QUICK_SALE_CPF_HASH_SECRET", "RESEND_API_KEY", "EMAIL_FROM", "FRONTEND_URL", "CLAMAV_HOST"] as const;
   for (const key of required) if (!env[key]) throw new Error(`${key} e obrigatoria em producao`);
   if (!env.COOKIE_SECURE) throw new Error("COOKIE_SECURE deve ser true em producao");
   if (!env.API_PUBLIC_URL?.startsWith("https://")) throw new Error("API_PUBLIC_URL deve usar HTTPS em producao");
+  if (!env.FRONTEND_URL?.startsWith("https://")) throw new Error("FRONTEND_URL deve usar HTTPS em producao");
   if (env.STORAGE_DRIVER !== "s3" || !env.S3_ENDPOINT || !env.S3_BUCKET || !env.S3_ACCESS_KEY_ID || !env.S3_SECRET_ACCESS_KEY || !env.S3_PUBLIC_URL) throw new Error("Storage S3/R2 deve estar configurado em producao");
 }

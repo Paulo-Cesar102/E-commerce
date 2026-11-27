@@ -1,0 +1,11 @@
+.git
+**/node_modules
+**/dist
+backend/.env
+frontend/.env
+backend/uploads
+backend/private-kyc
+backend/.upload-staging
+uploads
+private-kyc
+.upload-staging

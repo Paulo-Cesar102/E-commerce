@@ -7,6 +7,7 @@ import { env } from "../config/env.js";
 import prisma from "../../prisma/prisma.js";
 import { AppError } from "../errors/AppError.js";
 import { AuthRepository } from "../repository/AuthRepository.js";
+import { EmailService } from "./EmailService.js";
 
 type RegisterInput = {
   name: string;
@@ -29,7 +30,7 @@ const TERMS_VERSION = "2026-11-26";
 export class AuthService {
   private readonly googleClient = new OAuth2Client();
 
-  constructor(private readonly authRepository = new AuthRepository()) {}
+  constructor(private readonly authRepository = new AuthRepository(), private readonly emailService = new EmailService()) {}
 
   private hashToken(token: string) {
     return crypto.createHash("sha256").update(token).digest("hex");
@@ -168,7 +169,19 @@ export class AuthService {
     if (!user) return { requested: true };
     const token = crypto.randomBytes(32).toString("hex"); const expiresAt = new Date(Date.now() + 60 * 60_000);
     await this.authRepository.createPasswordResetToken({ userId: user.id, tokenHash: this.hashToken(token), expiresAt });
-    return { requested: true, ...(env.NODE_ENV === "development" ? { token } : {}) };
+    if (env.RESEND_API_KEY && env.EMAIL_FROM) {
+      const frontendUrl = (env.FRONTEND_URL ?? env.CORS_ORIGIN.split(",")[0] ?? "http://localhost:5173").replace(/\/$/, "");
+      try {
+        await this.emailService.sendPasswordReset(user.email, `${frontendUrl}/recuperar-senha#token=${encodeURIComponent(token)}`);
+      } catch (error) {
+        // Keep the response independent of account existence and never expose the token/provider details.
+        console.error("Password reset email could not be delivered");
+        if (env.NODE_ENV === "development") throw error;
+      }
+      return { requested: true };
+    }
+    if (env.NODE_ENV !== "production") return { requested: true, token };
+    throw new AppError(503, "Recuperacao por e-mail indisponivel");
   }
   async resetPassword(token: string, password: string) {
     const reset = await this.authRepository.findPasswordResetToken(this.hashToken(token));
