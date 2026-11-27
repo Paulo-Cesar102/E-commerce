@@ -8,13 +8,17 @@ import prisma from "../../prisma/prisma.js";
 import { z } from "zod";
 import { uploadSellerKycDocument, verifySellerKycDocument } from "../middlewares/kycUpload.js";
 import { AppError } from "../errors/AppError.js";
+import type { RequestHandler } from "express";
 
 export const sellerRoutes = Router();
 const dashboardService = new SellerDashboardService();
+const sellerAccountOnly: RequestHandler = (req, _res, next) => {
+  if (req.user?.role !== "SELLER") return next(new AppError(403, "Somente vendedores podem enviar documentos"));
+  next();
+};
 
 const kycSubmissionSchema = z.object({ legalName: z.string().trim().min(3).max(160) });
-sellerRoutes.post("/kyc/document", authRequired, uploadSellerKycDocument, verifySellerKycDocument, asyncHandler(async (req, res) => {
-  if (req.user!.role !== "SELLER") throw new AppError(403, "Somente vendedores podem enviar documentos");
+sellerRoutes.post("/kyc/document", authRequired, sellerAccountOnly, uploadSellerKycDocument, verifySellerKycDocument, asyncHandler(async (req, res) => {
   const filename = res.locals.kycDocumentFilename as string;
   const profile = await prisma.sellerProfile.findUnique({ where: { userId: req.user!.sub }, select: { document: true } });
   if (!profile) { await verifySellerKycDocument.remove(filename); throw new AppError(404, "Perfil de vendedor nao encontrado"); }

@@ -4,8 +4,10 @@ import path from "node:path";
 import multer from "multer";
 import type { NextFunction, Request, Response } from "express";
 import { AppError } from "../errors/AppError.js";
+import { ClamAvService } from "../services/ClamAvService.js";
 
 export const privateKycDirectory = path.resolve(process.cwd(), "private-kyc");
+const clamAv = new ClamAvService();
 const diskStorage = multer.diskStorage({
   destination: privateKycDirectory,
   filename: (_req, _file, callback) => callback(null, crypto.randomUUID()),
@@ -34,6 +36,7 @@ export const verifySellerKycDocument = Object.assign(async (req: Request, res: R
       await fs.rm(req.file.path, { force: true });
       return next(new AppError(400, "O conteudo do arquivo nao corresponde ao tipo informado"));
     }
+    await clamAv.scan(bytes);
     res.locals.kycDocumentFilename = req.file.filename;
     next();
   } catch (error) {

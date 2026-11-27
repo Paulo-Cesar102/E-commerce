@@ -44,3 +44,10 @@ npm run prisma:seed
 
 As contas são `demo-pro@vitrine.local`, `demo-free@vitrine.local` e `demo-cliente@vitrine.local`; todas usam a senha informada no comando. Os dados incluem uma compra e pagamento fictícios para a demonstração. Nunca execute com `NODE_ENV=production` nem use as contas em produção.
 
+
+## Recuperação de senha e verificação de uploads
+
+- A recuperação envia um link de uso único, válido por uma hora, pela API do Resend. Configure `RESEND_API_KEY`, `EMAIL_FROM` (remetente verificado no Resend) e `FRONTEND_URL` no backend. Armazene a chave nos secrets do ambiente de hospedagem, nunca no repositório.
+- Em `development`/`test`, sem Resend configurado, o endpoint retorna o token para desenvolvimento. Em produção, as configurações são obrigatórias e o token nunca é retornado pela API.
+- Imagens de produtos e documentos KYC são enviados ao ClamAV via `clamd`/`INSTREAM` antes de serem aceitos. O Docker Compose inicia o daemon na rede interna, sem publicar a porta do scanner no host. Em outras hospedagens, configure `CLAMAV_HOST` e `CLAMAV_PORT`, mantendo o serviço acessível apenas ao backend.
+- Em desenvolvimento fora do Docker, ClamAV é opcional. Se `CLAMAV_HOST` estiver configurado e o scanner ficar indisponível, o upload falha fechado e o arquivo é recusado.

@@ -2,13 +2,16 @@ import crypto from "node:crypto";
 import path from "node:path";
 import multer from "multer";
 import fs from "node:fs/promises";
+import { ClamAvService } from "../services/ClamAvService.js";
 import { AppError } from "../errors/AppError.js";
 import { env } from "../config/env.js";
 
 export const uploadsDirectory = path.resolve(process.cwd(), "uploads");
+export const uploadsStagingDirectory = path.resolve(process.cwd(), ".upload-staging");
+const clamAv = new ClamAvService();
 
 const diskStorage = multer.diskStorage({
-  destination: uploadsDirectory,
+  destination: uploadsStagingDirectory,
   filename: (_req, file, callback) => {
     callback(null, `${crypto.randomUUID()}${path.extname(file.originalname).toLowerCase()}`);
   },
@@ -46,9 +49,18 @@ export async function verifyUploadedImageContent(req: import("express").Request,
         await Promise.all(files.filter((candidate) => candidate.path).map((candidate) => fs.rm(candidate.path, { force: true })));
         throw new AppError(400, "O conteudo de uma imagem nao corresponde ao formato informado");
       }
+      await clamAv.scan(buffer);
+    }
+    for (const file of files) {
+      if (file.path) {
+        const finalPath = path.join(uploadsDirectory, path.basename(file.filename));
+        await fs.rename(file.path, finalPath);
+        file.path = finalPath;
+      }
     }
     next();
   } catch (error) {
+    await Promise.all(files.filter((file) => file.path).map((file) => fs.rm(file.path, { force: true }).catch(() => undefined)));
     next(error);
   }
 }
